@@ -248,7 +248,8 @@ describe('Carbon Club decentralized transport', () => {
     expect(decodeProjectInvite(encodeProjectInvite(invite))).toEqual(invite)
     const encrypted = encryptProjectPayload(invite, '项目密文')
     expect(Buffer.from(decryptProjectPayload(invite, encrypted)).toString('utf8')).toBe('项目密文')
-    expect(() => decryptProjectPayload(invite, { ...encrypted, ciphertext: `${encrypted.ciphertext.slice(0, -1)}A` })).toThrow(/authentication/)
+    const tamperedCiphertext = `${encrypted.ciphertext[0] === 'A' ? 'B' : 'A'}${encrypted.ciphertext.slice(1)}`
+    expect(() => decryptProjectPayload(invite, { ...encrypted, ciphertext: tamperedCiphertext })).toThrow(/authentication/)
     const rotated = rotateProjectInvite(invite, 60_000)
     expect(rotated.epoch).toBe(2)
     expect(() => decryptProjectPayload(rotated, encrypted)).toThrow()
