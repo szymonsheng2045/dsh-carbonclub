@@ -8,7 +8,7 @@ Carbon Club (`dsh-human-buffer`) is a human-to-human waiting room for [DeepSeek 
 
 ## Developer preview
 
-`0.5.0-beta.1` targets the current DSH developer preview (`0.1.1-rc.2`). It provides one signed public lobby with a hard cap of 500 active identities and eight speaking seats.
+`0.5.0-beta.2` targets the current DSH developer preview (`0.1.1-rc.2`). It provides one signed public lobby with a hard cap of 500 active identities and eight speaking seats.
 
 - A responsive, resizable drawer embedded in the DSH Web surface.
 - Eight deterministic speaking seats; five-minute cap, idle release, cooldown, slow mode, and anti-monologue rules.
@@ -26,16 +26,16 @@ The project, night, compute-tide, and low-age tabs are roadmap previews. The low
 Install the prebuilt release archive into a DSH profile (no install-time build permission required):
 
 ```sh
-curl -LO https://github.com/szymonsheng2045/dsh-carbon-club/releases/download/v0.5.0-beta.1/dsh-human-buffer-0.5.0-beta.1.tgz
-dsh plugin --profile carbon-club add ./dsh-human-buffer-0.5.0-beta.1.tgz
+curl -LO https://github.com/szymonsheng2045/dsh-carbonclub/releases/download/v0.5.0-beta.2/dsh-human-buffer-0.5.0-beta.2.tgz
+dsh plugin --profile carbon-club add ./dsh-human-buffer-0.5.0-beta.2.tgz
 dsh --profile carbon-club web
 ```
 
 For source development:
 
 ```sh
-git clone https://github.com/szymonsheng2045/dsh-carbon-club.git
-cd dsh-carbon-club
+git clone https://github.com/szymonsheng2045/dsh-carbonclub.git
+cd dsh-carbonclub
 pnpm install
 pnpm check
 dsh plugin --profile carbon-club-dev add .
@@ -60,11 +60,11 @@ See [Operating a relay](./docs/OPERATING-A-RELAY.md), [Protocol 0.5](./docs/PROT
 
 Public-lobby text is public to mesh participants. Noise protects transport hops; it is not end-to-end secrecy for a public room. Relay operators can observe Peer IDs, network addresses, timing, and traffic volume. The optional last-session note is transmitted only after explicit opt-in.
 
-Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/szymonsheng2045/dsh-carbon-club/security/advisories/new). Read the [security policy](./SECURITY.md) before inviting an untrusted audience.
+Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/szymonsheng2045/dsh-carbonclub/security/advisories/new). Read the [security policy](./SECURITY.md) and [review diagnostics contract](./docs/SECURITY-REVIEW.md) before inviting an untrusted audience.
 
 ## Community and support
 
-Use [GitHub Discussions](https://github.com/szymonsheng2045/dsh-carbon-club/discussions) for ideas and operator coordination, and [GitHub Issues](https://github.com/szymonsheng2045/dsh-carbon-club/issues) for reproducible defects. The `dsh-plugin` repository topic makes the bundle discoverable in the DSH ecosystem.
+Use [GitHub Discussions](https://github.com/szymonsheng2045/dsh-carbonclub/discussions) for ideas and operator coordination, and [GitHub Issues](https://github.com/szymonsheng2045/dsh-carbonclub/issues) for reproducible defects. The `dsh-plugin` repository topic makes the bundle discoverable in the DSH ecosystem.
 
 ## Contributing
 

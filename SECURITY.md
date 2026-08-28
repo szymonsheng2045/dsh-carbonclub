@@ -6,7 +6,7 @@ Only the newest `0.5.x` beta is supported. It targets a 500-participant public l
 
 ## Reporting
 
-Do not publish an exploitable report, private key, room invitation, IP address, session title, or signed message corpus in a public issue. Send a minimal reproduction through [GitHub private vulnerability reporting](https://github.com/szymonsheng2045/dsh-carbon-club/security/advisories/new). You should receive an acknowledgement within seven days. Do not deploy this beta to an untrusted open audience before an independent security review and staged multi-network trial.
+Do not publish an exploitable report, private key, room invitation, IP address, session title, or signed message corpus in a public issue. Send a minimal reproduction through [GitHub private vulnerability reporting](https://github.com/szymonsheng2045/dsh-carbonclub/security/advisories/new). You should receive an acknowledgement within seven days. Do not deploy this beta to an untrusted open audience before an independent security review and staged multi-network trial.
 
 ## Security boundary
 

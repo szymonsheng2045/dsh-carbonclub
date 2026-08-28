@@ -12,6 +12,20 @@ pnpm relay
 
 Keep the key file persistent and mode `0600`; replacing it changes the relay Peer ID and therefore its bootstrap multiaddress.
 
+## Optional review diagnostics
+
+There is no security backdoor. An operator may deliberately enable a read-only diagnostics window for a named reviewer:
+
+```sh
+umask 077
+openssl rand -hex 32 > ./data/review.token
+CARBON_RELAY_REVIEW_PORT=9091 \
+CARBON_RELAY_REVIEW_TOKEN_FILE=./data/review.token \
+pnpm relay
+```
+
+The listener is hard-bound to `127.0.0.1`, is disabled unless both settings are supplied, and accepts only `GET /healthz` plus the authenticated `GET /review/v1/report`. It returns aggregate health, public relay identity, declared limits and negative capability flags. It never returns messages, remote peer addresses or keys, and has no mutation or remote-control method. Do not add this port to a reverse proxy. See [SECURITY-REVIEW.md](./SECURITY-REVIEW.md).
+
 ## Container
 
 Copy `deploy/relay.env.example` to `.env`, set a public DNS announcement, and run:

@@ -4,7 +4,7 @@ RUN corepack enable
 COPY package.json pnpm-lock.deploy.yaml pnpm-workspace.yaml ./
 RUN cp pnpm-lock.deploy.yaml pnpm-lock.yaml
 RUN pnpm install --prod --frozen-lockfile
-ARG CARBON_RELEASE=0.5.0-beta.1
+ARG CARBON_RELEASE=0.5.0-beta.2
 LABEL org.opencontainers.image.version=$CARBON_RELEASE
 COPY scripts/community-relay.mjs ./scripts/community-relay.mjs
 COPY lib ./lib

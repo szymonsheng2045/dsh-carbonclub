@@ -6,7 +6,7 @@
 
 ## 报告方式
 
-不要在公开 Issue 中发布可利用漏洞、私钥、房间邀请、IP 地址、会话标题或签名消息全集。请通过 [GitHub 私密漏洞报告](https://github.com/szymonsheng2045/dsh-carbon-club/security/advisories/new)提交最小复现；维护者计划在七日内确认收到。在独立安全审查和分阶段跨网络测试完成前，不要把本测试版直接部署给不受信任的开放人群。
+不要在公开 Issue 中发布可利用漏洞、私钥、房间邀请、IP 地址、会话标题或签名消息全集。请通过 [GitHub 私密漏洞报告](https://github.com/szymonsheng2045/dsh-carbonclub/security/advisories/new)提交最小复现；维护者计划在七日内确认收到。在独立安全审查和分阶段跨网络测试完成前，不要把本测试版直接部署给不受信任的开放人群。
 
 ## 安全边界
 

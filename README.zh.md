@@ -8,7 +8,7 @@
 
 ## 开发者预览
 
-`0.5.0-beta.1` 面向当前 DSH 开发者预览版（`0.1.1-rc.2`），首版提供一个签名公共大厅：最多 500 个活跃身份，八个发言席。
+`0.5.0-beta.2` 面向当前 DSH 开发者预览版（`0.1.1-rc.2`），首版提供一个签名公共大厅：最多 500 个活跃身份，八个发言席。
 
 - 嵌入 DSH Web 界面的响应式、可调宽侧栏。
 - 八席确定性排队；单次坐席五分钟，并有空闲让位、冷却、慢速和防连麦霸屏规则。
@@ -26,16 +26,16 @@
 将预构建 Release 包安装进 DSH profile，无需授权安装期构建脚本：
 
 ```sh
-curl -LO https://github.com/szymonsheng2045/dsh-carbon-club/releases/download/v0.5.0-beta.1/dsh-human-buffer-0.5.0-beta.1.tgz
-dsh plugin --profile carbon-club add ./dsh-human-buffer-0.5.0-beta.1.tgz
+curl -LO https://github.com/szymonsheng2045/dsh-carbonclub/releases/download/v0.5.0-beta.2/dsh-human-buffer-0.5.0-beta.2.tgz
+dsh plugin --profile carbon-club add ./dsh-human-buffer-0.5.0-beta.2.tgz
 dsh --profile carbon-club web
 ```
 
 源码开发：
 
 ```sh
-git clone https://github.com/szymonsheng2045/dsh-carbon-club.git
-cd dsh-carbon-club
+git clone https://github.com/szymonsheng2045/dsh-carbonclub.git
+cd dsh-carbonclub
 pnpm install
 pnpm check
 dsh plugin --profile carbon-club-dev add .
@@ -60,11 +60,11 @@ DSH_CARBON_CLUB_BOOTSTRAP='/dns4/relay-a.example/tcp/443/wss/p2p/12D3KooW...,/dn
 
 公共大厅文字对网格参与者公开。Noise 保护传输跳点，但不等于公共房间端到端保密。中继运营者仍可观察 Peer ID、网络地址、时间和流量。上一个会话备注默认关闭，只有明确同意后才发送。
 
-漏洞请通过 [GitHub 私密漏洞报告](https://github.com/szymonsheng2045/dsh-carbon-club/security/advisories/new)提交。邀请不受信任的公开用户前，请先阅读[安全政策](./SECURITY.zh.md)。
+漏洞请通过 [GitHub 私密漏洞报告](https://github.com/szymonsheng2045/dsh-carbonclub/security/advisories/new)提交。邀请不受信任的公开用户前，请先阅读[安全政策](./SECURITY.zh.md)和[审查诊断契约](./docs/SECURITY-REVIEW.zh.md)。
 
 ## 社区与支持
 
-构想和节点协作请使用 [GitHub Discussions](https://github.com/szymonsheng2045/dsh-carbon-club/discussions)，可复现缺陷请使用 [GitHub Issues](https://github.com/szymonsheng2045/dsh-carbon-club/issues)。仓库的 `dsh-plugin` topic 用于进入 DSH 插件生态发现入口。
+构想和节点协作请使用 [GitHub Discussions](https://github.com/szymonsheng2045/dsh-carbonclub/discussions)，可复现缺陷请使用 [GitHub Issues](https://github.com/szymonsheng2045/dsh-carbonclub/issues)。仓库的 `dsh-plugin` topic 用于进入 DSH 插件生态发现入口。
 
 ## 参与贡献
 

@@ -10,6 +10,7 @@ import { identify } from '@libp2p/identify'
 import { gossipsub } from '@libp2p/gossipsub'
 import { circuitRelayServer } from '@libp2p/circuit-relay-v2'
 import { HALL_SYNC_PROTOCOL, HALL_TOPIC, RoomEventLedger, verifyRoomEvent } from '../lib/relay-runtime.js'
+import { startReviewServer, stopReviewServer } from './review-server.mjs'
 
 const keyFile = resolve(process.env.CARBON_RELAY_KEY_FILE ?? './data/carbon-relay.key')
 const listen = (process.env.CARBON_RELAY_LISTEN ?? '/ip4/0.0.0.0/tcp/9090/ws').split(',').map(value => value.trim()).filter(Boolean)
@@ -17,12 +18,20 @@ const announce = (process.env.CARBON_RELAY_ANNOUNCE ?? '').split(',').map(value 
 const maxReservations = Math.min(1_000, Math.max(1, Number(process.env.CARBON_RELAY_MAX_RESERVATIONS ?? 600)))
 const maxConnections = Math.min(2_000, Math.max(maxReservations + 64, Number(process.env.CARBON_RELAY_MAX_CONNECTIONS ?? 1_200)))
 const maxSyncBytes = 8 * 1024 * 1024
+const reviewPort = Number(process.env.CARBON_RELAY_REVIEW_PORT ?? 0)
+const reviewTokenFile = process.env.CARBON_RELAY_REVIEW_TOKEN_FILE
 const decoder = new TextDecoder()
 const encoder = new TextEncoder()
 const ledger = new RoomEventLedger()
 const syncWindows = new Map()
 const inboundWindows = new Map()
 let pendingVerifications = 0
+const startedAt = new Date().toISOString()
+
+if (!Number.isInteger(reviewPort) || reviewPort < 0 || reviewPort > 65_535) throw new Error('CARBON_RELAY_REVIEW_PORT must be an integer between 0 and 65535')
+if ((reviewPort > 0) !== (reviewTokenFile !== undefined && reviewTokenFile.length > 0)) {
+  throw new Error('CARBON_RELAY_REVIEW_PORT and CARBON_RELAY_REVIEW_TOKEN_FILE must be configured together')
+}
 
 async function loadKey() {
   try { return privateKeyFromProtobuf(Buffer.from(await readFile(keyFile, 'utf8'), 'base64')) } catch (error) {
@@ -112,7 +121,36 @@ await node.handle(HALL_SYNC_PROTOCOL, async (stream, connection) => {
   await stream.close()
 }, { maxInboundStreams: 4, maxOutboundStreams: 4, runOnLimitedConnection: true })
 const addresses = node.getMultiaddrs().map(address => address.toString())
+const packageVersion = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version
+const reviewServer = reviewPort > 0 ? await startReviewServer({
+  port: reviewPort,
+  tokenFile: reviewTokenFile,
+  report: () => ({
+    schemaVersion: 1,
+    service: 'dsh-carbon-relay',
+    release: packageVersion,
+    startedAt,
+    observedAt: new Date().toISOString(),
+    peerId: node.peerId.toString(),
+    addresses,
+    limits: { maxReservations, maxConnections, maxSyncBytes, hallCapacity: 500 },
+    health: {
+      connections: node.getConnections().length,
+      topicPeers: node.services.pubsub.getSubscribers(HALL_TOPIC).length,
+      pendingVerifications,
+      ...ledger.diagnostics(),
+      rssMiB: Number((process.memoryUsage().rss / (1024 * 1024)).toFixed(1)),
+    },
+    privacy: {
+      rawMessages: false,
+      remotePeerAddresses: false,
+      privateKeys: false,
+      remoteControl: false,
+    },
+  }),
+}) : undefined
 console.log(JSON.stringify({ event: 'carbon-relay.ready', peerId: node.peerId.toString(), addresses, maxReservations, maxConnections, hallCapacity: 500 }))
+if (reviewServer !== undefined) console.log(JSON.stringify({ event: 'carbon-relay.review-ready', address: `http://127.0.0.1:${reviewPort}`, access: 'token-required', remoteControl: false }))
 const healthTimer = setInterval(() => {
   console.log(JSON.stringify({
     event: 'carbon-relay.health',
@@ -129,6 +167,7 @@ healthTimer.unref()
 async function shutdown(signal) {
   clearInterval(healthTimer)
   console.log(JSON.stringify({ event: 'carbon-relay.stopping', signal }))
+  await stopReviewServer(reviewServer)
   await node.stop()
   process.exit(0)
 }

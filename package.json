@@ -1,15 +1,15 @@
 {
   "name": "dsh-human-buffer",
-  "version": "0.5.0-beta.1",
+  "version": "0.5.0-beta.2",
   "description": "A zero-model-cost human waiting room embedded in DeepSeek Harness",
   "author": "Sheng (https://github.com/szymonsheng2045)",
   "homepage": "https://laozi.art/#carbon-club",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/szymonsheng2045/dsh-carbon-club.git"
+    "url": "git+https://github.com/szymonsheng2045/dsh-carbonclub.git"
   },
   "bugs": {
-    "url": "https://github.com/szymonsheng2045/dsh-carbon-club/issues"
+    "url": "https://github.com/szymonsheng2045/dsh-carbonclub/issues"
   },
   "type": "module",
   "packageManager": "pnpm@11.7.0",
@@ -41,6 +41,7 @@
   "files": [
     "lib",
     "scripts/community-relay.mjs",
+    "scripts/review-server.mjs",
     "deploy",
     "Dockerfile.relay",
     "docker-compose.relay.yml",
@@ -63,12 +64,13 @@
     "test": "vitest run",
     "test:p2p": "node scripts/p2p-three-node.mjs",
     "test:relay": "node scripts/p2p-relay-smoke.mjs",
+    "test:review": "node scripts/review-server-smoke.mjs",
     "test:failover": "node scripts/p2p-router-failover.mjs",
     "test:abuse": "node scripts/p2p-ingress-abuse-smoke.mjs",
     "test:capacity": "node scripts/capacity-500.mjs",
     "relay": "node scripts/community-relay.mjs",
     "test:package": "node scripts/verify-package-exports.mjs",
-    "check": "pnpm test && pnpm build && pnpm test:p2p && pnpm test:relay && pnpm test:failover && pnpm test:abuse && pnpm test:capacity && pnpm test:package",
+    "check": "pnpm test && pnpm build && pnpm test:p2p && pnpm test:relay && pnpm test:review && pnpm test:failover && pnpm test:abuse && pnpm test:capacity && pnpm test:package",
     "sync:relay-lock": "cp pnpm-lock.yaml pnpm-lock.deploy.yaml",
     "prepack": "pnpm sync:relay-lock && pnpm check"
   },

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0-beta.2
+
+- Added an opt-in, token-protected review endpoint bound exclusively to the relay operator's loopback interface.
+- Exposed only aggregate health, declared limits, public relay identity and explicit privacy capability flags; the endpoint has no message, key or remote-control surface.
+- Added an automated safety-contract smoke test covering loopback health, authentication and mutation rejection.
+
 ## 0.5.0-beta.1
 
 - Updated the DSH development surface and isolated runtime to `0.1.1-rc.2`.
