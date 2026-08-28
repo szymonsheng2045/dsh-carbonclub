@@ -1,0 +1,139 @@
+{
+  "name": "dsh-human-buffer",
+  "version": "0.5.0-beta.1",
+  "description": "A zero-model-cost human waiting room embedded in DeepSeek Harness",
+  "author": "Sheng (https://github.com/szymonsheng2045)",
+  "homepage": "https://laozi.art/#carbon-club",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/szymonsheng2045/dsh-carbon-club.git"
+  },
+  "bugs": {
+    "url": "https://github.com/szymonsheng2045/dsh-carbon-club/issues"
+  },
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./typert": {
+      "types": "./lib/typert.host.d.ts",
+      "default": "./lib/typert.host.js"
+    },
+    "./remote": {
+      "types": "./lib/typert.remote-client.d.ts",
+      "default": "./lib/typert.remote-client.js"
+    },
+    "./relay-runtime": {
+      "types": "./lib/relay-runtime.d.ts",
+      "default": "./lib/relay-runtime.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "scripts/community-relay.mjs",
+    "deploy",
+    "Dockerfile.relay",
+    "docker-compose.relay.yml",
+    "pnpm-lock.deploy.yaml",
+    "pnpm-workspace.yaml",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "docs",
+    "LICENSE",
+    "SECURITY.md",
+    "SECURITY.zh.md",
+    "CONTRIBUTING.md",
+    "CONTRIBUTING.zh.md",
+    "CODE_OF_CONDUCT.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsc --noEmit && tsdown && node scripts/write-build-marker.mjs",
+    "test": "vitest run",
+    "test:p2p": "node scripts/p2p-three-node.mjs",
+    "test:relay": "node scripts/p2p-relay-smoke.mjs",
+    "test:failover": "node scripts/p2p-router-failover.mjs",
+    "test:abuse": "node scripts/p2p-ingress-abuse-smoke.mjs",
+    "test:capacity": "node scripts/capacity-500.mjs",
+    "relay": "node scripts/community-relay.mjs",
+    "test:package": "node scripts/verify-package-exports.mjs",
+    "check": "pnpm test && pnpm build && pnpm test:p2p && pnpm test:relay && pnpm test:failover && pnpm test:abuse && pnpm test:capacity && pnpm test:package",
+    "sync:relay-lock": "cp pnpm-lock.yaml pnpm-lock.deploy.yaml",
+    "prepack": "pnpm sync:relay-lock && pnpm check"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-api-gateway",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.0",
+    "@deepseek-ai/dsh-api-gateway": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-runtime": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-layout": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-credentials": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-typert-protocol": "0.1.1-rc.2",
+    "react": "^18.2.0"
+  },
+  "dependencies": {
+    "@chainsafe/libp2p-noise": "17.0.0",
+    "@chainsafe/libp2p-yamux": "8.0.1",
+    "@libp2p/autonat": "3.0.26",
+    "@libp2p/bootstrap": "12.0.29",
+    "@libp2p/circuit-relay-v2": "4.2.11",
+    "@libp2p/crypto": "5.1.22",
+    "@libp2p/dcutr": "3.0.26",
+    "@libp2p/gossipsub": "17.0.0",
+    "@libp2p/identify": "4.1.12",
+    "@libp2p/mdns": "12.0.29",
+    "@libp2p/peer-id": "6.0.15",
+    "@libp2p/tcp": "11.0.26",
+    "@libp2p/websockets": "10.1.19",
+    "@multiformats/multiaddr": "13.0.3",
+    "libp2p": "3.3.8",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.0",
+    "@deepseek-ai/dsh-api-gateway": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-runtime": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-layout": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-credentials": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-typert-protocol": "0.1.1-rc.2",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "license": "MIT",
+  "keywords": ["dsh-plugin", "deepseek", "deepseek-harness", "dsh", "libp2p", "p2p", "chat", "decentralized"],
+  "publishConfig": { "access": "public", "provenance": true },
+  "private": false
+}

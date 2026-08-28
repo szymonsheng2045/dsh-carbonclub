@@ -1,0 +1,5 @@
+packages:
+  - .
+
+overrides:
+  '@libp2p/interface': 3.2.5

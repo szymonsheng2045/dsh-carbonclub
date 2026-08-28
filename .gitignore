@@ -1,0 +1,10 @@
+node_modules/
+*.tgz
+dev/dsh-home/profiles/web/node_modules/
+dev/dsh-home/profiles/web/cordis.yml
+dev/dsh-home/profiles/web/pnpm-lock.yaml
+dev/dsh-home/sessions/
+dev/dsh-home/settings.json
+dev/dsh-home/.credentials.yaml
+dev/dsh-home/settings.yaml
+dev/dsh-home/storages/

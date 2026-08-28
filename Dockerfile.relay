@@ -1,0 +1,18 @@
+FROM node:22-alpine
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.deploy.yaml pnpm-workspace.yaml ./
+RUN cp pnpm-lock.deploy.yaml pnpm-lock.yaml
+RUN pnpm install --prod --frozen-lockfile
+ARG CARBON_RELEASE=0.5.0-beta.1
+LABEL org.opencontainers.image.version=$CARBON_RELEASE
+COPY scripts/community-relay.mjs ./scripts/community-relay.mjs
+COPY lib ./lib
+RUN node -e "import('./lib/relay-runtime.js')"
+RUN mkdir -p /app/data && chown -R node:node /app
+USER node
+ENV CARBON_RELAY_LISTEN=/ip4/0.0.0.0/tcp/9090/ws
+EXPOSE 9090
+VOLUME ["/app/data"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 CMD ["node", "-e", "const s=require('node:net').connect(9090,'127.0.0.1',()=>{s.end();process.exit(0)});s.setTimeout(2000,()=>process.exit(1));s.on('error',()=>process.exit(1))"]
+CMD ["node", "scripts/community-relay.mjs"]

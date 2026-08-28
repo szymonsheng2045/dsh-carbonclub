@@ -1,0 +1,8 @@
+relay.example.org {
+  encode zstd gzip
+  reverse_proxy carbon-relay:9090
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+  }
+}

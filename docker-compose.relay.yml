@@ -1,0 +1,30 @@
+services:
+  carbon-relay:
+    build:
+      context: .
+      dockerfile: Dockerfile.relay
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
+    ports:
+      - "9090:9090"
+    volumes:
+      - carbon-relay-data:/app/data
+    environment:
+      CARBON_RELAY_ANNOUNCE: ${CARBON_RELAY_ANNOUNCE:-}
+      CARBON_RELAY_MAX_RESERVATIONS: ${CARBON_RELAY_MAX_RESERVATIONS:-600}
+      CARBON_RELAY_MAX_CONNECTIONS: ${CARBON_RELAY_MAX_CONNECTIONS:-1200}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 8192
+
+volumes:
+  carbon-relay-data:
