@@ -46,15 +46,15 @@ dsh --profile carbon-club-dev web
 
 ## 社区联网
 
-碳基会所没有强制中心服务。局域网节点直接发现；跨公网群组连接由社区分别运营的 bootstrap/relay：
+碳基会所没有强制中心服务。局域网节点直接发现；跨公网群组连接由社区分别运营的 bootstrap/relay。首台志愿 Mac 中继现可用于邀请测试：
 
 ```sh
-DSH_CARBON_CLUB_BOOTSTRAP='/dns4/relay-a.example/tcp/443/wss/p2p/12D3KooW...,/dns4/relay-b.example/tcp/443/wss/p2p/12D3KooW...' dsh --profile carbon-club web
+DSH_CARBON_CLUB_BOOTSTRAP='/dns4/carbon-relay.a2a-crucible.xyz/tcp/443/wss/p2p/12D3KooWLdvJF8g2gt5j7qhrJHtbharz1Tv8dguzUoTt8Saz8uHU' dsh --profile carbon-club web
 ```
 
 中继只负责发现、字节转发和已签名事件的有界内存缓存，不持有账号库、审核权或永久历史。500 人大厅应至少使用三个独立运营的 WSS 节点，并按 50、100、250、500 人逐级压测。
 
-详见[社区中继运维](./docs/OPERATING-A-RELAY.md)、[协议 0.5](./docs/PROTOCOL.md)、[500 人容量预算](./docs/CAPACITY-500.md)和[公开测试门槛](./docs/PUBLIC-BETA-CHECKLIST.md)。
+这台志愿 Mac 只是可替换的首发节点，不承诺可用性，也不等同于计划中的三节点公开拓扑。详见[社区节点](./docs/COMMUNITY-NODES.md)、[社区中继运维](./docs/OPERATING-A-RELAY.md)、[协议 0.5](./docs/PROTOCOL.md)、[500 人容量预算](./docs/CAPACITY-500.md)和[公开测试门槛](./docs/PUBLIC-BETA-CHECKLIST.md)。
 
 ## 隐私与安全
 

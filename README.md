@@ -46,15 +46,15 @@ The repository commits `lib/` so GitHub installs have prebuilt entry points. For
 
 ## Community connectivity
 
-Carbon Club has no mandatory central service. LAN peers discover each other directly; cross-Internet groups point at independently operated bootstrap/relay nodes:
+Carbon Club has no mandatory central service. LAN peers discover each other directly; cross-Internet groups point at independently operated bootstrap/relay nodes. The first volunteer Mac relay is available for invitation testing:
 
 ```sh
-DSH_CARBON_CLUB_BOOTSTRAP='/dns4/relay-a.example/tcp/443/wss/p2p/12D3KooW...,/dns4/relay-b.example/tcp/443/wss/p2p/12D3KooW...' dsh --profile carbon-club web
+DSH_CARBON_CLUB_BOOTSTRAP='/dns4/carbon-relay.a2a-crucible.xyz/tcp/443/wss/p2p/12D3KooWLdvJF8g2gt5j7qhrJHtbharz1Tv8dguzUoTt8Saz8uHU' dsh --profile carbon-club web
 ```
 
 A relay provides discovery, byte forwarding, and a bounded in-memory cache of already signed events. It holds no account database, moderation authority, or durable history. A 500-person lobby should use at least three independently operated WSS nodes and ramp through 50, 100, 250, and 500-person trials.
 
-See [Operating a relay](./docs/OPERATING-A-RELAY.md), [Protocol 0.5](./docs/PROTOCOL.md), [500-person capacity budget](./docs/CAPACITY-500.md), and the [public-beta gate](./docs/PUBLIC-BETA-CHECKLIST.md).
+The volunteer Mac is a replaceable starter node, not an availability guarantee or the planned three-node public topology. See [Community nodes](./docs/COMMUNITY-NODES.md), [Operating a relay](./docs/OPERATING-A-RELAY.md), [Protocol 0.5](./docs/PROTOCOL.md), [500-person capacity budget](./docs/CAPACITY-500.md), and the [public-beta gate](./docs/PUBLIC-BETA-CHECKLIST.md).
 
 ## Privacy and security
 
