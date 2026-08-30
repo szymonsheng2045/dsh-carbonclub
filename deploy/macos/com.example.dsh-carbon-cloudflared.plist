@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.example.dsh-carbon-cloudflared</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__USER_HOME__/.local/libexec/dsh-carbon-club/run-cloudflared.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__USER_HOME__/.local/share/dsh-carbon-club</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>CARBON_TUNNEL_TOKEN_FILE</key>
+    <string>__USER_HOME__/.local/share/dsh-carbon-club/cloudflare-tunnel.token</string>
+    <key>CARBON_TUNNEL_LOG_FILE</key>
+    <string>__USER_HOME__/Library/Logs/dsh-carbon-cloudflared.log</string>
+    <key>CARBON_TUNNEL_METRICS_ADDRESS</key>
+    <string>127.0.0.1:20242</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>Umask</key>
+  <integer>63</integer>
+  <key>StandardOutPath</key>
+  <string>__USER_HOME__/Library/Logs/dsh-carbon-cloudflared.wrapper.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__USER_HOME__/Library/Logs/dsh-carbon-cloudflared.wrapper.err.log</string>
+</dict>
+</plist>

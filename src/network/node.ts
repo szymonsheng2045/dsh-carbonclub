@@ -15,7 +15,7 @@ import { assertDialAddress, decodeInvite, encodeInvite, signInvite } from './inv
 import { NETWORK_HALL_RULES } from './hall-rules.js'
 import { HALL_SYNC_PROTOCOL, HALL_TOPIC } from './protocol.js'
 import type { CarbonPrivateKey, RememberedPeer } from './identity.js'
-import { contentAddressProfile, MAX_SYNC_EVENTS, RoomEventLedger, signCheckpointEvent, signPresenceEvent, signRoomEvent, verifyRoomEvent } from './room-events.js'
+import { contentAddressProfile, MAX_SYNC_EVENTS, RoomEventLedger, signCheckpointEvent, signPresenceEvent, signRoomEvent, signSyncRequest, verifyRoomEvent } from './room-events.js'
 import type { ConnectResult, EvidenceBundle, HallPresenceInput, InviteInfo, NetworkStatus, PostRoomMessageInput, RoomDelta, RoomMessage, RoomProfile, RoomSnapshot, SignedRoomEvent } from './types.js'
 
 export { HALL_SYNC_PROTOCOL, HALL_TOPIC } from './protocol.js'
@@ -107,7 +107,7 @@ export class CarbonClubNode {
         },
         services: {
           identify: identify(),
-          pubsub: gossipsub({ allowPublishToZeroTopicPeers: true, emitSelf: false, floodPublish: false, doPX: true, D: 6, Dlo: 4, Dhi: 12, Dout: 2 }),
+          pubsub: gossipsub({ allowPublishToZeroTopicPeers: true, emitSelf: false, floodPublish: false, doPX: false, D: 6, Dlo: 4, Dhi: 12, Dout: 2 }),
           autoNAT: autoNAT({ timeout: 10_000, maxInboundStreams: 2, maxOutboundStreams: 2 }),
           dcutr: dcutr(),
         },
@@ -134,8 +134,13 @@ export class CarbonClubNode {
         let requestOffset = 0
         for (const chunk of requestChunks) { requestData.set(chunk, requestOffset); requestOffset += chunk.byteLength }
         const request: unknown = JSON.parse(decoder.decode(requestData))
-        if (typeof request !== 'object' || request === null || !('version' in request) || request.version !== 1 || !('topic' in request) || request.topic !== HALL_TOPIC) {
+        if (typeof request !== 'object' || request === null || !('version' in request) || request.version !== 1 || !('topic' in request) || request.topic !== HALL_TOPIC || !('request' in request)) {
           stream.abort(new Error('Room sync request is invalid'))
+          return
+        }
+        const signedRequest = await verifyRoomEvent(request.request)
+        if (signedRequest.kind !== 'room.sync.request' || signedRequest.origin !== remotePeerId || signedRequest.payload.targetPeerId !== node.peerId.toString()) {
+          stream.abort(new Error('Room sync requester is invalid'))
           return
         }
         const events = this.ledger.eventsForSync(MAX_SYNC_EVENTS)
@@ -369,7 +374,8 @@ export class CarbonClubNode {
       const signal = AbortSignal.timeout(DIAL_TIMEOUT_MS)
       const stream = await connection.newStream(HALL_SYNC_PROTOCOL, { signal, runOnLimitedConnection: true })
       stream.maxReadBufferLength = MAX_SYNC_BYTES
-      stream.send(encoder.encode(JSON.stringify({ version: 1, topic: HALL_TOPIC })))
+      const request = await signSyncRequest(this.privateKey, targetPeerId, this.nextSequence())
+      stream.send(encoder.encode(JSON.stringify({ version: 1, topic: HALL_TOPIC, request })))
       // Half-close after a bounded request. The responder waits for this FIN
       // before sending, avoiding a Yamux open/close race.
       const closeWrite = stream.close({ signal })

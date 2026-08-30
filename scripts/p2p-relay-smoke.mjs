@@ -41,14 +41,28 @@ relay.services.pubsub.addEventListener('message', event => {
     .then(signed => { relayLedger.accept(signed) })
     .catch(() => {})
 })
-await relay.handle(HALL_SYNC_PROTOCOL, async stream => {
+await relay.handle(HALL_SYNC_PROTOCOL, async (stream, connection) => {
   relaySyncRequests += 1
+  const requestChunks = []
   let requestBytes = 0
-  for await (const chunk of stream) requestBytes += chunk.byteLength
+  for await (const chunk of stream) {
+    requestBytes += chunk.byteLength
+    requestChunks.push(chunk.subarray())
+  }
   if (requestBytes === 0 || requestBytes > 1_024) {
     stream.abort(new Error('Invalid sync request'))
     return
   }
+  const requestData = new Uint8Array(requestBytes)
+  let requestOffset = 0
+  for (const chunk of requestChunks) { requestData.set(chunk, requestOffset); requestOffset += chunk.byteLength }
+  const requestEnvelope = JSON.parse(decoder.decode(requestData))
+  const signedRequest = await verifyRoomEvent(requestEnvelope.request)
+  assert.equal(requestEnvelope.version, 1)
+  assert.equal(requestEnvelope.topic, HALL_TOPIC)
+  assert.equal(signedRequest.kind, 'room.sync.request')
+  assert.equal(signedRequest.origin, connection.remotePeer.toString())
+  assert.equal(signedRequest.payload.targetPeerId, relay.peerId.toString())
   const data = encoder.encode(JSON.stringify({ version: 1, topic: HALL_TOPIC, events: relayLedger.eventsForSync() }))
   stream.send(data)
   await stream.close()

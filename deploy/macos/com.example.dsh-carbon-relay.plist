@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.example.dsh-carbon-relay</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__NODE_BIN__</string>
+    <string>__DSH_REPO__/scripts/community-relay.mjs</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__DSH_REPO__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>CARBON_RELAY_LISTEN</key>
+    <string>/ip4/127.0.0.1/tcp/9090/ws</string>
+    <key>CARBON_RELAY_ANNOUNCE</key>
+    <string>/dns4/relay.example.org/tcp/443/wss</string>
+    <key>CARBON_RELAY_KEY_FILE</key>
+    <string>__USER_HOME__/.local/share/dsh-carbon-club/carbon-relay.key</string>
+    <key>CARBON_RELAY_MAX_RESERVATIONS</key>
+    <string>600</string>
+    <key>CARBON_RELAY_MAX_CONNECTIONS</key>
+    <string>1200</string>
+    <key>CARBON_RELAY_REVIEW_PORT</key>
+    <string>9091</string>
+    <key>CARBON_RELAY_REVIEW_TOKEN_FILE</key>
+    <string>__USER_HOME__/.local/share/dsh-carbon-club/review.token</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>Umask</key>
+  <integer>63</integer>
+  <key>SoftResourceLimits</key>
+  <dict><key>NumberOfFiles</key><integer>4096</integer></dict>
+  <key>HardResourceLimits</key>
+  <dict><key>NumberOfFiles</key><integer>8192</integer></dict>
+  <key>StandardOutPath</key>
+  <string>__USER_HOME__/Library/Logs/dsh-carbon-relay.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__USER_HOME__/Library/Logs/dsh-carbon-relay.err.log</string>
+</dict>
+</plist>

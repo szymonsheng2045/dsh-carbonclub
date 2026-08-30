@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { lstat, readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 
 function authorized(request, token) {
@@ -23,6 +23,10 @@ function respond(response, statusCode, body = undefined) {
 export async function startReviewServer({ port, tokenFile, report }) {
   if (!Number.isInteger(port) || port < 0 || port > 65_535) throw new Error('Review port must be an integer between 0 and 65535')
   if (typeof report !== 'function') throw new Error('Review report provider is required')
+  const tokenMetadata = await lstat(tokenFile)
+  if (!tokenMetadata.isFile() || tokenMetadata.isSymbolicLink()) throw new Error('Review token must be a regular, non-symlink file')
+  if ((tokenMetadata.mode & 0o077) !== 0) throw new Error('Review token permissions must not grant group or other access')
+  if (typeof process.getuid === 'function' && tokenMetadata.uid !== process.getuid()) throw new Error('Review token must be owned by the service user')
   const token = Buffer.from((await readFile(tokenFile, 'utf8')).trim())
   if (token.byteLength < 32) throw new Error('Review token must contain at least 32 bytes')
 

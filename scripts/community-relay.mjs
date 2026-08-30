@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { createLibp2p } from 'libp2p'
 import { privateKeyFromProtobuf, privateKeyToProtobuf, generateKeyPair } from '@libp2p/crypto/keys'
@@ -13,7 +13,7 @@ import { HALL_SYNC_PROTOCOL, HALL_TOPIC, RoomEventLedger, verifyRoomEvent } from
 import { startReviewServer, stopReviewServer } from './review-server.mjs'
 
 const keyFile = resolve(process.env.CARBON_RELAY_KEY_FILE ?? './data/carbon-relay.key')
-const listen = (process.env.CARBON_RELAY_LISTEN ?? '/ip4/0.0.0.0/tcp/9090/ws').split(',').map(value => value.trim()).filter(Boolean)
+const listen = (process.env.CARBON_RELAY_LISTEN ?? '/ip4/127.0.0.1/tcp/9090/ws').split(',').map(value => value.trim()).filter(Boolean)
 const announce = (process.env.CARBON_RELAY_ANNOUNCE ?? '').split(',').map(value => value.trim()).filter(Boolean)
 const maxReservations = Math.min(1_000, Math.max(1, Number(process.env.CARBON_RELAY_MAX_RESERVATIONS ?? 600)))
 const maxConnections = Math.min(2_000, Math.max(maxReservations + 64, Number(process.env.CARBON_RELAY_MAX_CONNECTIONS ?? 1_200)))
@@ -25,6 +25,8 @@ const encoder = new TextEncoder()
 const ledger = new RoomEventLedger()
 const syncWindows = new Map()
 const inboundWindows = new Map()
+const maxSyncsPerMinute = 60
+let globalSyncWindow = { startedAt: 0, count: 0 }
 let pendingVerifications = 0
 const startedAt = new Date().toISOString()
 
@@ -33,9 +35,17 @@ if ((reviewPort > 0) !== (reviewTokenFile !== undefined && reviewTokenFile.lengt
   throw new Error('CARBON_RELAY_REVIEW_PORT and CARBON_RELAY_REVIEW_TOKEN_FILE must be configured together')
 }
 
+async function readPrivateFile(path, label) {
+  const metadata = await lstat(path)
+  if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error(`${label} must be a regular, non-symlink file`)
+  if ((metadata.mode & 0o077) !== 0) throw new Error(`${label} permissions must not grant group or other access`)
+  if (typeof process.getuid === 'function' && metadata.uid !== process.getuid()) throw new Error(`${label} must be owned by the service user`)
+  return readFile(path, 'utf8')
+}
+
 async function loadKey() {
-  try { return privateKeyFromProtobuf(Buffer.from(await readFile(keyFile, 'utf8'), 'base64')) } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code !== 'ENOENT') throw error
+  try { return privateKeyFromProtobuf(Buffer.from(await readPrivateFile(keyFile, 'Relay private key'), 'base64')) } catch (error) {
+    if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error
     const key = await generateKeyPair('Ed25519')
     await mkdir(dirname(keyFile), { recursive: true })
     await writeFile(keyFile, Buffer.from(privateKeyToProtobuf(key)).toString('base64'), { mode: 0o600 })
@@ -53,13 +63,14 @@ const node = await createLibp2p({
   connectionManager: { maxConnections, maxIncomingPendingConnections: 128, inboundConnectionThreshold: 128 },
   services: {
     identify: identify(),
-    pubsub: gossipsub({ allowPublishToZeroTopicPeers: true, emitSelf: false, doPX: true, D: 256, Dlo: 128, Dhi: 600, Dout: 64 }),
+    pubsub: gossipsub({ allowPublishToZeroTopicPeers: true, emitSelf: false, doPX: false, D: 256, Dlo: 128, Dhi: 600, Dout: 64 }),
     relay: circuitRelayServer({
       reservations: {
         maxReservations, reservationTtl: 60 * 60 * 1_000,
+        applyDefaultLimit: true,
         defaultDurationLimit: 10 * 60 * 1_000, defaultDataLimit: 16n * 1024n * 1024n,
       },
-      maxInboundHopStreams: 512, maxOutboundHopStreams: 512, maxOutboundStopStreams: 1_024,
+      maxInboundHopStreams: 512, maxOutboundHopStreams: 512, maxOutboundStopStreams: Math.min(maxReservations, 600),
     }),
   },
 })
@@ -100,6 +111,7 @@ await node.handle(HALL_SYNC_PROTOCOL, async (stream, connection) => {
     return
   }
   syncWindows.set(peerId, now)
+  const requestChunks = []
   let requestBytes = 0
   for await (const chunk of stream) {
     requestBytes += chunk.byteLength
@@ -107,11 +119,31 @@ await node.handle(HALL_SYNC_PROTOCOL, async (stream, connection) => {
       stream.abort(new Error('Invalid room sync request'))
       return
     }
+    requestChunks.push(chunk.subarray())
   }
   if (requestBytes === 0 || requestBytes > 1_024) {
     stream.abort(new Error('Invalid room sync request'))
     return
   }
+  const requestData = new Uint8Array(requestBytes)
+  let requestOffset = 0
+  for (const chunk of requestChunks) { requestData.set(chunk, requestOffset); requestOffset += chunk.byteLength }
+  let request
+  try {
+    const decoded = JSON.parse(decoder.decode(requestData))
+    if (typeof decoded !== 'object' || decoded === null || decoded.version !== 1 || decoded.topic !== HALL_TOPIC || !('request' in decoded)) throw new Error('Invalid sync envelope')
+    request = await verifyRoomEvent(decoded.request)
+    if (request.kind !== 'room.sync.request' || request.origin !== peerId || request.payload.targetPeerId !== node.peerId.toString()) throw new Error('Invalid sync requester')
+  } catch {
+    stream.abort(new Error('Invalid signed room sync request'))
+    return
+  }
+  if (now - globalSyncWindow.startedAt >= 60_000) globalSyncWindow = { startedAt: now, count: 0 }
+  if (globalSyncWindow.count >= maxSyncsPerMinute) {
+    stream.abort(new Error('Global room sync budget exceeded'))
+    return
+  }
+  globalSyncWindow.count += 1
   const data = encoder.encode(JSON.stringify({ version: 1, topic: HALL_TOPIC, events: ledger.eventsForSync() }))
   if (data.byteLength > maxSyncBytes) {
     stream.abort(new Error('Room sync snapshot exceeds byte budget'))
@@ -133,7 +165,7 @@ const reviewServer = reviewPort > 0 ? await startReviewServer({
     observedAt: new Date().toISOString(),
     peerId: node.peerId.toString(),
     addresses,
-    limits: { maxReservations, maxConnections, maxSyncBytes, hallCapacity: 500 },
+    limits: { maxReservations, maxConnections, maxSyncBytes, maxSyncsPerMinute, hallCapacity: 500 },
     health: {
       connections: node.getConnections().length,
       topicPeers: node.services.pubsub.getSubscribers(HALL_TOPIC).length,
