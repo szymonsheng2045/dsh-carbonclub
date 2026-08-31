@@ -25,8 +25,11 @@ not additional owned domains.
 ## Current migration state (2026-08-31 CST)
 
 - `a2a-crucible.xyz` is active in Cloudflare and remains exclusively A2A.
-- `laozi.art` is present in Cloudflare but reports invalid nameservers; Gname is
-  still authoritative.
+- Gname accepted the `laozi.art` nameserver change to
+  `cash.ns.cloudflare.com` and `deborah.ns.cloudflare.com`; the registrar UI
+  reports that the change is waiting to take effect. The `.art` registry and
+  recursive DNS may continue returning the previous Gname nameservers during
+  propagation.
 - The Vercel apex record for `laozi.art` must remain available throughout the
   nameserver migration.
 - The dedicated `dsh-carbon-club-relay` tunnel is healthy and its intended
@@ -99,7 +102,9 @@ without a separate approval.
 ## 当前迁移状态（北京时间 2026-08-31）
 
 - `a2a-crucible.xyz` 已在 Cloudflare 激活，并继续只服务 A2A。
-- `laozi.art` 在 Cloudflare 仍显示名称服务器无效，权威 DNS 仍在 Gname。
+- Gname 已接受将 `laozi.art` 名称服务器切换为 `cash.ns.cloudflare.com` 和
+  `deborah.ns.cloudflare.com`，注册商页面显示“等待生效”；传播期间 `.art`
+  注册局及递归 DNS 仍可能返回旧 Gname 名称服务器。
 - `dsh-carbon-club-relay` 隧道健康，目标正式域名是 `relay.laozi.art`。
 - `carbon-relay.a2a-crucible.xyz` 只是兼容期临时地址；除现有 README、社区
   节点说明和本边界记录外，不得进入源代码、部署模板、包元数据或其他文档。
