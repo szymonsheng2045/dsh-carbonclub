@@ -54,7 +54,7 @@ DSH_CARBON_CLUB_BOOTSTRAP='/dns4/carbon-relay.a2a-crucible.xyz/tcp/443/wss/p2p/1
 
 A relay provides discovery, byte forwarding, and a bounded in-memory cache of already signed events. It holds no account database, moderation authority, or durable history. A 500-person lobby should use at least three independently operated WSS nodes and ramp through 50, 100, 250, and 500-person trials.
 
-The volunteer Mac is a replaceable starter node, not an availability guarantee or the planned three-node public topology. See [Community nodes](./docs/COMMUNITY-NODES.md), [Operating a relay](./docs/OPERATING-A-RELAY.md), [Protocol 0.5](./docs/PROTOCOL.md), [500-person capacity budget](./docs/CAPACITY-500.md), and the [public-beta gate](./docs/PUBLIC-BETA-CHECKLIST.md).
+The volunteer Mac is a replaceable starter node, not an availability guarantee or the planned three-node public topology. The current A2A hostname is a temporary compatibility endpoint and no new Carbon Club infrastructure may be placed under the A2A domain. See [Infrastructure boundaries](./docs/INFRASTRUCTURE-BOUNDARIES.md), [Community nodes](./docs/COMMUNITY-NODES.md), [Operating a relay](./docs/OPERATING-A-RELAY.md), [Protocol 0.5](./docs/PROTOCOL.md), [500-person capacity budget](./docs/CAPACITY-500.md), and the [public-beta gate](./docs/PUBLIC-BETA-CHECKLIST.md).
 
 ## Privacy and security
 

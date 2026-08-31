@@ -28,7 +28,7 @@ for (const required of ['./lib/client.js', './lib/typert.host.js', './lib/typert
 
 assert.equal(manifest.private, false, 'public beta package must not be marked private')
 assert.match(manifest.version, /^0\.5\.0-beta\./, 'public beta package version must identify protocol milestone 0.5')
-for (const required of ['README.md', 'LICENSE', 'SECURITY.md', 'docs/PROTOCOL.md', 'docs/PUBLIC-BETA-CHECKLIST.md', 'docs/OPERATING-A-RELAY.md', 'docs/CAPACITY-500.md', 'scripts/community-relay.mjs', 'Dockerfile.relay', 'docker-compose.relay.yml', 'pnpm-lock.yaml', 'pnpm-lock.deploy.yaml', 'pnpm-workspace.yaml']) await access(resolve(root, required))
+for (const required of ['README.md', 'LICENSE', 'SECURITY.md', 'docs/PROTOCOL.md', 'docs/PUBLIC-BETA-CHECKLIST.md', 'docs/OPERATING-A-RELAY.md', 'docs/CAPACITY-500.md', 'docs/INFRASTRUCTURE-BOUNDARIES.md', 'scripts/community-relay.mjs', 'scripts/check-domain-boundaries.mjs', 'Dockerfile.relay', 'docker-compose.relay.yml', 'pnpm-lock.yaml', 'pnpm-lock.deploy.yaml', 'pnpm-workspace.yaml']) await access(resolve(root, required))
 assert.equal(
   await readFile(resolve(root, 'pnpm-lock.deploy.yaml'), 'utf8'),
   await readFile(resolve(root, 'pnpm-lock.yaml'), 'utf8'),

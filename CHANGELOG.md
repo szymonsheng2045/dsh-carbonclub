@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Documented strict Carbon Club/A2A domain, tunnel and credential ownership boundaries.
+- Added a release check that rejects A2A domain dependencies from Carbon Club runtime and deployment files.
+
 ## 0.5.0-beta.2
 
 - Added an opt-in, token-protected review endpoint bound exclusively to the relay operator's loopback interface.
