@@ -8,6 +8,7 @@ umask 077
 
 CLOUDFLARED_BIN="${CLOUDFLARED_BIN:-/opt/homebrew/bin/cloudflared}"
 TOKEN_FILE="${CARBON_TUNNEL_TOKEN_FILE:?CARBON_TUNNEL_TOKEN_FILE is required}"
+CONFIG_FILE="${CARBON_TUNNEL_CONFIG_FILE:?CARBON_TUNNEL_CONFIG_FILE is required}"
 LOG_FILE="${CARBON_TUNNEL_LOG_FILE:?CARBON_TUNNEL_LOG_FILE is required}"
 METRICS_ADDRESS="${CARBON_TUNNEL_METRICS_ADDRESS:-127.0.0.1:20242}"
 METRICS_URL="http://${METRICS_ADDRESS}/metrics"
@@ -30,6 +31,32 @@ if [ "$TOKEN_MODE" != "600" ]; then
 fi
 if [ "$TOKEN_OWNER" != "$(/usr/bin/id -u)" ]; then
   echo "tunnel token must be owned by the service user" >&2
+  exit 1
+fi
+if [ ! -f "$CONFIG_FILE" ] || [ -L "$CONFIG_FILE" ] || [ ! -r "$CONFIG_FILE" ]; then
+  echo "tunnel config must be a regular, non-symlink file" >&2
+  exit 1
+fi
+CONFIG_MODE="$(/usr/bin/stat -f '%Lp' "$CONFIG_FILE")"
+CONFIG_OWNER="$(/usr/bin/stat -f '%u' "$CONFIG_FILE")"
+CONFIG_DIR="$(/usr/bin/dirname "$CONFIG_FILE")"
+CONFIG_DIR_MODE="$(/usr/bin/stat -f '%Lp' "$CONFIG_DIR")"
+CONFIG_DIR_OWNER="$(/usr/bin/stat -f '%u' "$CONFIG_DIR")"
+if [ "$CONFIG_MODE" != "600" ]; then
+  echo "tunnel config permissions must be 600 (found $CONFIG_MODE)" >&2
+  exit 1
+fi
+if [ "$CONFIG_OWNER" != "$(/usr/bin/id -u)" ]; then
+  echo "tunnel config must be owned by the service user" >&2
+  exit 1
+fi
+if [ "$CONFIG_DIR_MODE" != "700" ] || [ "$CONFIG_DIR_OWNER" != "$(/usr/bin/id -u)" ]; then
+  echo "tunnel config directory must be owned by the service user with permissions 700" >&2
+  exit 1
+fi
+CONFIG_EFFECTIVE="$(/usr/bin/awk '{ sub(/#.*/, ""); gsub(/^[ \t]+|[ \t]+$/, ""); if (length) print }' "$CONFIG_FILE")"
+if [ "$CONFIG_EFFECTIVE" != "no-autoupdate: true" ]; then
+  echo "tunnel config may contain only no-autoupdate: true" >&2
   exit 1
 fi
 
@@ -98,6 +125,8 @@ if tun_is_enabled; then
 fi
 
 "$CLOUDFLARED_BIN" tunnel \
+  --config "$CONFIG_FILE" \
+  --no-autoupdate \
   --protocol http2 \
   --metrics "$METRICS_ADDRESS" \
   --loglevel info \

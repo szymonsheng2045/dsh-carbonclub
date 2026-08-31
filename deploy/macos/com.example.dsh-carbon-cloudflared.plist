@@ -14,6 +14,8 @@
   <dict>
     <key>CARBON_TUNNEL_TOKEN_FILE</key>
     <string>__USER_HOME__/.local/share/dsh-carbon-club/cloudflare-tunnel.token</string>
+    <key>CARBON_TUNNEL_CONFIG_FILE</key>
+    <string>__USER_HOME__/.local/share/dsh-carbon-club/cloudflared.yml</string>
     <key>CARBON_TUNNEL_LOG_FILE</key>
     <string>__USER_HOME__/Library/Logs/dsh-carbon-cloudflared.log</string>
     <key>CARBON_TUNNEL_METRICS_ADDRESS</key>

@@ -69,9 +69,10 @@
     "test:abuse": "node scripts/p2p-ingress-abuse-smoke.mjs",
     "test:capacity": "node scripts/capacity-500.mjs",
     "test:domains": "node scripts/check-domain-boundaries.mjs",
+    "test:macos-tunnel": "node scripts/check-macos-tunnel-boundaries.mjs",
     "relay": "node scripts/community-relay.mjs",
     "test:package": "node scripts/verify-package-exports.mjs",
-    "check": "pnpm test && pnpm build && pnpm test:p2p && pnpm test:relay && pnpm test:review && pnpm test:failover && pnpm test:abuse && pnpm test:capacity && pnpm test:domains && pnpm test:package",
+    "check": "pnpm test && pnpm build && pnpm test:p2p && pnpm test:relay && pnpm test:review && pnpm test:failover && pnpm test:abuse && pnpm test:capacity && pnpm test:domains && pnpm test:macos-tunnel && pnpm test:package",
     "sync:relay-lock": "cp pnpm-lock.yaml pnpm-lock.deploy.yaml",
     "prepack": "pnpm sync:relay-lock && pnpm check"
   },

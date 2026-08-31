@@ -1,0 +1,3 @@
+# Dedicated Carbon Club configuration.
+# Public hostname ingress remains remotely managed by Cloudflare.
+no-autoupdate: true
