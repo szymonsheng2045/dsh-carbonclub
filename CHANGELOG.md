@@ -4,6 +4,9 @@
 
 - Documented strict Carbon Club/A2A domain, tunnel and credential ownership boundaries.
 - Added a release check that rejects A2A domain dependencies from Carbon Club runtime and deployment files.
+- Cut the official community bootstrap over to `relay.laozi.art` while retaining the former A2A hostname only as a temporary rollback alias.
+- Isolated the Carbon Club cloudflared process from the user's default A2A configuration and pinned its origin to `127.0.0.1:9090`.
+- Added an operator probe that verifies public WSS, Noise, Yamux, the expected Peer ID and Circuit Relay v2 reservation.
 
 ## 0.5.0-beta.2
 

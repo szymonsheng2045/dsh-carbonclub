@@ -21,6 +21,10 @@ Target: one public-lobby protocol with a hard capacity of 500 identities and eig
 
 ## External go-live work
 
+- Before every public build, run `pnpm probe:relay` with
+  `CARBON_RELAY_PROBE_ADDRESS` set to the published WSS multiaddress and
+  `CARBON_RELAY_EXPECTED_PEER_ID` set to the documented relay identity; require
+  a successful Noise/Yamux connection and Circuit Relay v2 reservation.
 - Recruit at least three independent bootstrap/router operators, put WSS/TLS in front of them, publish incident contacts, and run staged 50 → 100 → 250 → 500 multi-network trials.
 - Arrange independent security review of cryptography, libp2p configuration and invite dialing.
 - Establish a human abuse-report response process before distributing invitations beyond a trusted cohort.

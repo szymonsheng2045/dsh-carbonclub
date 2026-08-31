@@ -32,3 +32,9 @@ Documents/Desktop folders, and keep the installed plist, token, key and logs
 private to the service user. A remotely managed tunnel should contain exactly
 one published application route to the loopback relay. Do not route the review
 port.
+
+Install user LaunchAgent property lists with mode `0644`; keep the executable
+wrapper at `0700`. When changing a loaded plist, use `bootout`, wait until both
+the service and its listener have fully exited, then `bootstrap` the validated
+candidate. An immediate bootstrap can race macOS process teardown and return an
+I/O error even when the plist is valid.
