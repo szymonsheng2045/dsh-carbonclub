@@ -1,7 +1,20 @@
 import assert from 'node:assert/strict'
 import { generateKeyPair } from '@libp2p/crypto/keys'
 import { multiaddr } from '@multiformats/multiaddr'
-import { CarbonClubNode } from '../lib/index.js'
+
+// lib/index.js 静态依赖宿主提供的 @deepseek-ai/* 包；固定运行目录只装中继运行依赖，
+// 在那里直接跑本探针会报 ERR_MODULE_NOT_FOUND。给出可操作的诊断而不是晦涩栈。
+let CarbonClubNode
+try {
+  ;({ CarbonClubNode } = await import('../lib/index.js'))
+} catch (error) {
+  if (error && error.code === 'ERR_MODULE_NOT_FOUND') {
+    console.error('probe-public-relay: 无法加载 lib/index.js（缺少宿主依赖 @deepseek-ai/*）。')
+    console.error('本探针须在完整仓库检出（pnpm install，含 devDependencies）中运行，不能在固定运行目录内运行。')
+    process.exit(2)
+  }
+  throw error
+}
 
 const address = process.env.CARBON_RELAY_PROBE_ADDRESS
 const expectedPeerId = process.env.CARBON_RELAY_EXPECTED_PEER_ID
@@ -32,12 +45,15 @@ try {
   while (Date.now() < deadline) {
     const status = client.status()
     if (status.connectedPeers >= 1 && status.relayAddresses >= 1) {
+      // Transport success alone must not certify a router on the old hall topic.
+      await client.verifyPeerProtocol(expectedPeerId)
       console.log(JSON.stringify({
         ok: true,
         expectedPeerId,
         connectedPeers: status.connectedPeers,
         relayReservations: status.relayAddresses,
         transport: 'dns4/tcp/443/wss + Noise + Yamux + Circuit Relay v2',
+        hallProtocol: '0.5.1',
       }))
       ready = true
       break

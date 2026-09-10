@@ -6,9 +6,11 @@ Carbon Club (`dsh-human-buffer`) is a human-to-human waiting room for [DeepSeek 
 
 > DSH on. Humans nearby. Eight seats talk; everyone else watches and queues.
 
-## Developer preview
+## Current release
 
-`0.5.0-beta.2` targets the current DSH developer preview (`0.1.1-rc.2`). It provides one signed public lobby with a hard cap of 500 active identities and eight speaking seats.
+**v0.5.1-beta.1** is published. Versus 0.5.0: it fixes simultaneous queue-expiry seat derivation, uses separate 0.5.1 topic/sync channels, and adds read-only review diagnostics plus stricter resource ceilings to the community relay. 0.5.1 clients cannot share one lobby with 0.5.0 clients or old router caches; dual-entry coexistence and graded rollback are covered in the [upgrade and rollback guide](./docs/UPGRADING-0.5.1.zh.md), and acceptance records in the [candidate notes](./docs/CANDIDATE-0.5.1.zh.md).
+
+`0.5.1-beta.1` targets the current DSH developer preview (`0.1.1-rc.2`). It provides one signed public lobby with a hard cap of 500 active identities and eight speaking seats.
 
 - A responsive, resizable drawer embedded in the DSH Web surface.
 - Eight deterministic speaking seats; five-minute cap, idle release, cooldown, slow mode, and anti-monologue rules.
@@ -26,10 +28,15 @@ The project, night, compute-tide, and low-age tabs are roadmap previews. The low
 Install the prebuilt release archive into a DSH profile (no install-time build permission required):
 
 ```sh
-curl -LO https://github.com/szymonsheng2045/dsh-carbonclub/releases/download/v0.5.0-beta.2/dsh-human-buffer-0.5.0-beta.2.tgz
-dsh plugin --profile carbon-club add ./dsh-human-buffer-0.5.0-beta.2.tgz
-dsh --profile carbon-club web
+curl -LO https://github.com/szymonsheng2045/dsh-carbonclub/releases/download/v0.5.1-beta.1/dsh-human-buffer-0.5.1-beta.1.tgz
+dsh plugin --profile carbon-club add ./dsh-human-buffer-0.5.1-beta.1.tgz
+# A custom profile created by `dsh plugin` ships only @deepseek-ai/dsh-base — with no
+# application layer the boot idles silently. Add the web app bundle once (idempotent):
+node -e "const fs=require('fs'),os=require('os'),p=(process.env.DSH_HOME??os.homedir()+'/.dsh')+'/profiles/carbon-club/package.json',m=JSON.parse(fs.readFileSync(p,'utf8')),b=m.dsh.profile.bundles;if(!b.includes('@deepseek-ai/dsh-web-app'))b.splice(1,0,'@deepseek-ai/dsh-web-app');fs.writeFileSync(p,JSON.stringify(m,null,2)+'\n')"
+dsh --profile carbon-club
 ```
+
+Note: `dsh --profile carbon-club web` is rejected by the launcher (`web` is an alias for the built-in web profile); app flags such as `--host`, `--port` and `--no-open` follow the profile name directly.
 
 For source development:
 
@@ -39,18 +46,21 @@ cd dsh-carbonclub
 pnpm install
 pnpm check
 dsh plugin --profile carbon-club-dev add .
-dsh --profile carbon-club-dev web
+node -e "const fs=require('fs'),os=require('os'),p=(process.env.DSH_HOME??os.homedir()+'/.dsh')+'/profiles/carbon-club-dev/package.json',m=JSON.parse(fs.readFileSync(p,'utf8')),b=m.dsh.profile.bundles;if(!b.includes('@deepseek-ai/dsh-web-app'))b.splice(1,0,'@deepseek-ai/dsh-web-app');fs.writeFileSync(p,JSON.stringify(m,null,2)+'\n')"
+dsh --profile carbon-club-dev
 ```
 
 The repository commits `lib/` so GitHub installs have prebuilt entry points. For a reproducible public-beta install, prefer the release archive or pin a commit.
 
 ## Community connectivity
 
-Carbon Club has no mandatory central service. LAN peers discover each other directly; cross-Internet groups point at independently operated bootstrap/relay nodes. The first volunteer Mac relay is available for invitation testing:
+Carbon Club has no mandatory central service. LAN peers discover each other directly; cross-Internet groups point at independently operated bootstrap/relay nodes. The first volunteer Mac relay (0.5.1) is available for public testing:
 
 ```sh
-DSH_CARBON_CLUB_BOOTSTRAP='/dns4/relay.laozi.art/tcp/443/wss/p2p/12D3KooWLdvJF8g2gt5j7qhrJHtbharz1Tv8dguzUoTt8Saz8uHU' dsh --profile carbon-club web
+DSH_CARBON_CLUB_BOOTSTRAP='/dns4/relay-051.laozi.art/tcp/443/wss/p2p/12D3KooWABxQrMHAVgbeqiVctkAPBFPSPSqCJi1SC4YRZh1hsMrh' dsh --profile carbon-club
 ```
+
+The legacy 0.5.0 entry `relay.laozi.art` keeps serving older clients through the transition window (at least two weeks); the 0.5.0 rollback path is documented in the [upgrade and rollback guide](./docs/UPGRADING-0.5.1.zh.md).
 
 A relay provides discovery, byte forwarding, and a bounded in-memory cache of already signed events. It holds no account database, moderation authority, or durable history. A 500-person lobby should use at least three independently operated WSS nodes and ramp through 50, 100, 250, and 500-person trials.
 
@@ -60,11 +70,11 @@ The volunteer Mac is a replaceable starter node, not an availability guarantee o
 
 Public-lobby text is public to mesh participants. Noise protects transport hops; it is not end-to-end secrecy for a public room. Relay operators can observe Peer IDs, network addresses, timing, and traffic volume. The optional last-session note is transmitted only after explicit opt-in.
 
-Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/szymonsheng2045/dsh-carbonclub/security/advisories/new). Read the [security policy](./SECURITY.md) and [review diagnostics contract](./docs/SECURITY-REVIEW.md) before inviting an untrusted audience.
+Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/szymonsheng2045/dsh-carbonclub/security/advisories/new) or by email to szymonsheng2045@gmail.com. Read the [security policy](./SECURITY.md) and [review diagnostics contract](./docs/SECURITY-REVIEW.md) before inviting an untrusted audience.
 
 ## Community and support
 
-Use [GitHub Discussions](https://github.com/szymonsheng2045/dsh-carbonclub/discussions) for ideas and operator coordination, and [GitHub Issues](https://github.com/szymonsheng2045/dsh-carbonclub/issues) for reproducible defects. The `dsh-plugin` repository topic makes the bundle discoverable in the DSH ecosystem.
+Use [GitHub Discussions](https://github.com/szymonsheng2045/dsh-carbonclub/discussions) for ideas and operator coordination, [GitHub Issues](https://github.com/szymonsheng2045/dsh-carbonclub/issues) for reproducible defects, and szymonsheng2045@gmail.com for operations and abuse reports. The `dsh-plugin` repository topic makes the bundle discoverable in the DSH ecosystem.
 
 ## Contributing
 

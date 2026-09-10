@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { performance } from 'node:perf_hooks'
-import { RoomEventLedger } from '../lib/index.js'
+import { HALL_TOPIC, RoomEventLedger } from '../lib/index.js'
 
 function presence(index, action, sequence, issuedAt, joinedAt) {
   const origin = `capacity-peer-${index.toString().padStart(4, '0')}`
@@ -40,7 +40,7 @@ const snapshot = ledger.snapshot(base + 4_000, 'capacity-peer-0499')
 const snapshotMs = performance.now() - snapshotStarted
 const syncEvents = ledger.eventsForSync(1_300, base + 4_000)
 const snapshotBytes = Buffer.byteLength(JSON.stringify(snapshot))
-const syncBytes = Buffer.byteLength(JSON.stringify({ version: 1, topic: '/dsh-human-buffer/room/hall/0.5.0', events: syncEvents }))
+const syncBytes = Buffer.byteLength(JSON.stringify({ version: 1, topic: HALL_TOPIC, events: syncEvents }))
 const heapGrowthMiB = (process.memoryUsage().heapUsed - heapBefore) / (1024 * 1024)
 
 assert.equal(snapshot.capacity, 500)

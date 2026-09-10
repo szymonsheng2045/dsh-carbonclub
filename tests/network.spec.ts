@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { generateKeyPair, privateKeyToProtobuf } from '@libp2p/crypto/keys'
 import { peerIdFromPublicKey } from '@libp2p/peer-id'
 import { CarbonClubNode } from '../src/network/node.js'
-import { decodeInvite, encodeInvite } from '../src/network/invite.js'
+import { assertDialAddress, decodeInvite, encodeInvite, signInvite } from '../src/network/invite.js'
+import { HALL_PROTOCOL_VERSION } from '../src/network/protocol.js'
 import { loadOrCreatePrivateKey } from '../src/network/identity.js'
 import { TYPERT } from '../src/typert.host.js'
 import { TYPERT_REMOTE } from '../src/typert.remote-client.js'
@@ -37,6 +38,24 @@ function syntheticMessage(index: number, issuedAt: number): SignedRoomEvent {
 }
 
 describe('Carbon Club decentralized transport', () => {
+  it('allows the standard TLS relay port without opening other privileged ports', async () => {
+    const peer = peerIdFromPublicKey((await generateKeyPair('Ed25519')).publicKey).toString()
+    expect(() => assertDialAddress(`/dns4/relay.laozi.art/tcp/443/wss/p2p/${peer}`, peer)).not.toThrow()
+    expect(() => assertDialAddress(`/dns4/relay.laozi.art/tcp/443/wss/p2p/${peer}/p2p-circuit/p2p/${peer}`, peer)).not.toThrow()
+    for (const [port, transport] of [[443, 'ws'], [80, 'ws'], [22, 'wss'], [0, 'wss']]) {
+      expect(() => assertDialAddress(`/dns4/relay.laozi.art/tcp/${port}/${transport}/p2p/${peer}`, peer)).toThrow()
+    }
+  })
+  it('explains full capacity and enforces cooldown after a suspended seat expires', () => {
+    const ledger = new RoomEventLedger()
+    for (let index = 0; index < 500; index++) ledger.accept(syntheticPresence(index, 'join', 1, 10000, 10000))
+    expect(ledger.admissionError('new-peer', 10001)).toBe('HALL_FULL')
+    expect(ledger.admissionError('synthetic-peer-0000', 10001)).toBeUndefined()
+    expect(ledger.admissionError('synthetic-peer-0000', 130001)).toBe('HALL_COOLDOWN')
+    expect(ledger.admissionError('synthetic-peer-0000', 730001)).toBeUndefined()
+    expect(ledger.admissionError('synthetic-peer-0033', 130001)).toBeUndefined()
+  })
+
   it('persists one private identity through the DSH credential seam', async () => {
     let stored: string | undefined
     const credentials = {
@@ -118,6 +137,25 @@ describe('Carbon Club decentralized transport', () => {
     }
   })
 
+  it('binds invitations to the hall protocol and rejects legacy invites before remembering or dialing', async () => {
+    const key = await generateKeyPair('Ed25519')
+    const peerId = peerIdFromPublicKey(key.publicKey).toString()
+    const payload = { version: 2 as const, hallProtocol: HALL_PROTOCOL_VERSION, roomId: 'hall' as const, peerId, addresses: [`/ip4/127.0.0.1/tcp/19999/ws/p2p/${peerId}`], issuedAt: 1000, expiresAt: 10000 }
+    const signed = await signInvite(key, payload)
+    expect((await decodeInvite(encodeInvite(signed), 1001)).hallProtocol).toBe(HALL_PROTOCOL_VERSION)
+    const oldProtocol = await signInvite(key, { ...payload, hallProtocol: '0.5.0' })
+    await expect(decodeInvite(encodeInvite(oldProtocol), 1001)).rejects.toThrow('HALL_PROTOCOL_MISMATCH')
+    await expect(decodeInvite(encodeInvite({ ...oldProtocol, hallProtocol: HALL_PROTOCOL_VERSION }), 1001)).rejects.toThrow(/signature/)
+    await expect(decodeInvite(encodeInvite(await signInvite(key, { ...payload, issuedAt: 100000, expiresAt: 200000 })), 1001)).rejects.toThrow(/lifetime/)
+    const guest = new CarbonClubNode(await generateKeyPair('Ed25519'), { enableMdns: false, enableRelayReservations: false, listenAddresses: ['/ip4/127.0.0.1/tcp/0/ws'] })
+    await guest.start()
+    try {
+      await expect(guest.connect('carbon1.legacy')).rejects.toThrow('HALL_PROTOCOL_MISMATCH')
+      expect(guest.status().connectedPeers).toBe(0)
+      expect(guest.status().discoveredPeers).toBe(0)
+    } finally { await guest.stop() }
+  })
+
   it('connects two independent Host nodes from an invite', async () => {
     const host = new CarbonClubNode(await generateKeyPair('Ed25519'))
     const guest = new CarbonClubNode(await generateKeyPair('Ed25519'))
@@ -130,6 +168,20 @@ describe('Carbon Club decentralized transport', () => {
       await Promise.all([host.stop(), guest.stop()])
     }
   })
+
+  it('keeps local chat available when an optional relay cannot be reserved', async () => {
+    const unreachableId = peerIdFromPublicKey((await generateKeyPair('Ed25519')).publicKey).toString()
+    const host = new CarbonClubNode(await generateKeyPair('Ed25519'), { enableMdns: false, listenAddresses: ['/ip4/127.0.0.1/tcp/0/ws'], bootstrapAddresses: [`/ip4/127.0.0.1/tcp/1/ws/p2p/${unreachableId}`] })
+    const guest = new CarbonClubNode(await generateKeyPair('Ed25519'), { enableMdns: false, enableRelayReservations: false, listenAddresses: ['/ip4/127.0.0.1/tcp/0/ws'] })
+    try {
+      await host.start()
+      expect(host.status().phase).toBe('online')
+      expect(host.status().relayAddresses).toBe(0)
+      await guest.start()
+      await guest.connect((await host.createInvite()).code)
+      expect(guest.status().connectedPeers).toBeGreaterThan(0)
+    } finally { await Promise.all([host.stop(), guest.stop()]) }
+  }, 20000)
 
   it('replicates a signed human message between two Host nodes', async () => {
     const host = new CarbonClubNode(await generateKeyPair('Ed25519'))
@@ -205,6 +257,23 @@ describe('Carbon Club decentralized transport', () => {
     expect(lateLedger.snapshot(base + 4_000).participantCount).toBe(500)
     expect(lateLedger.snapshot(base + 4_000).queueCount).toBe(492)
   }, 12_000)
+
+  it('retains local presence beyond the 24-person queue preview so leaving still works', async () => {
+    const node = new CarbonClubNode(await generateKeyPair('Ed25519'), { enableMdns: false })
+    await node.start()
+    try {
+      // Populate the local ledger at its already-verified-event seam, without 40 sockets.
+      const ledger = (node as unknown as { ledger: RoomEventLedger }).ledger
+      const base = Date.now() - 2_000
+      for (let index = 0; index < 40; index++) ledger.accept(syntheticPresence(index, 'join', 1, base + index, base + index))
+      const joined = await node.joinHall({ name: 'queued after preview' })
+      expect(joined.queue).toHaveLength(24)
+      expect(joined.localQueuePosition).toBe(33)
+      const left = await node.leaveHall()
+      expect(left.localQueuePosition).toBeUndefined()
+      expect(left.participantCount).toBe(40)
+    } finally { await node.stop() }
+  })
 
   it('uses content-addressed avatars once and serves cursor deltas', async () => {
     const key = await generateKeyPair('Ed25519')

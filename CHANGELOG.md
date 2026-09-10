@@ -1,6 +1,26 @@
 # Changelog
 
-## Unreleased
+## 0.5.1-beta.1 — 2026-09-10
+
+- Bound pending client verification to 64 tasks and actively expire silent client/router sync streams after 10 seconds. Added burst, deadline, and real-relay regressions following a DeepSeek model review (not an independent security audit).
+- Introduced signed carbon2 invitations bound to the hall protocol, with bilingual mismatch errors. Registered Identify listeners before bootstrap startup and avoided duplicate Identify streams; optional relay reservation failures now preserve local connectivity.
+- Added archived 0.5.0/current 0.5.1 coexistence tests, public-document link checks, rebuild-before-pack, and a separate release-documentation version gate following Kimi review.
+- Applied the same-IP churn mitigation to the shipped community relay; added a 16-cycle relay-only delivery regression and strengthened client churn assertions to verify each new guest's exact message. Disabling P6 removes a concentration penalty and still needs independent security review; PoW does not eliminate Sybil or eclipse attacks.
+- Restricted packaged documentation to an explicit public allowlist; excluded internal handoff and QA records and added packaging guards.
+- Fixed silent message loss under connection churn: gossipsub retains a disconnected peer's IP for up to one hour when its score is non-positive, so stale entries accumulated until every honest peer sharing one NAT/LAN/loopback address crossed the graylist threshold and all of its RPCs were dropped. IP-colocation scoring is now disabled; bulk-Sybil cost remains with the admission proof of work and inbound rate limits. Covered by the new `test:churn` loopback regression.
+- Corrected simultaneous expiry: offline queued identities cannot be promoted into an already-expired seat and receive an undeserved cooldown. Topic and sync channel now use 0.5.1; coordinated migration is required.
+- Added explicit capacity/cooldown admission failures, bounded browser Host requests, unknown-result timeout guidance, and protocol compatibility hints.
+- Allowed standard WSS port 443 in signed invitations while retaining restrictions on other privileged ports and insecure WS 443.
+- Added loopback-only DSH test configuration, a real UI peer fixture, controlled process-suspension soak and delayed-link/disconnect regression.
+- Prepared human-owned community operations, independent-review handoff and staged theme-room plans. No new room is enabled, and no production node was changed.
+
+- Fixed local queue presence beyond the 24-person browser preview, including heartbeat and leave behavior.
+- Serialized profile, message and leave mutations; rejected stale Host/poll responses and duplicate sends.
+- Bounded incremental browser profile/avatar caches and retained drafts typed while a message is sending.
+- Added persistent chat nicknames with language-independent defaults, IME-safe Enter handling and multiline rendering.
+- Fixed collapsed mobile overlays intercepting the workspace, unread-message scrolling, resize listener cleanup and clipboard error feedback.
+- Aligned idle warnings with the protocol: warning at 90 seconds, release at 120 seconds; clarified capacity and queue labels.
+- Added browser regression fixtures and a dated QA record. These changes have not been released or deployed.
 
 - Documented strict Carbon Club/A2A domain, tunnel and credential ownership boundaries.
 - Added a release check that rejects A2A domain dependencies from Carbon Club runtime and deployment files.

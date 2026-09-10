@@ -215,6 +215,8 @@ function eventOrder(left: SignedRoomEvent, right: SignedRoomEvent): number {
 }
 
 function fillSeats(state: DerivedHall, at: number): void {
+  // Expired queued peers never take a seat and must not acquire its cooldown.
+  state.queue = state.queue.filter(participant => participant.lastPresenceAt + NETWORK_HALL_RULES.presenceTtlMs > at)
   for (let index = 0; index < state.seats.length && state.queue.length > 0; index += 1) {
     if (state.seats[index] !== null) continue
     state.seats[index] = { participant: state.queue.shift()!, seatedAt: at }
@@ -323,6 +325,14 @@ function derive(events: readonly SignedRoomEvent[], now: number): DerivedHall {
 }
 
 export class RoomEventLedger {
+  admissionError(peerId: string, now = Date.now()): 'HALL_COOLDOWN' | 'HALL_FULL' | undefined {
+    const state = derive(this.events, now)
+    if (participantFor(state, peerId) !== undefined) return undefined
+    if ((state.cooldownUntil.get(peerId) ?? 0) > now) return 'HALL_COOLDOWN'
+    if (state.queue.length + state.seats.filter(Boolean).length >= NETWORK_HALL_RULES.capacity) return 'HALL_FULL'
+    return undefined
+  }
+
   private readonly seenEventIds = new Set<string>()
   private readonly lastSequenceByOrigin = new Map<string, number>()
   private readonly events: SignedRoomEvent[] = []

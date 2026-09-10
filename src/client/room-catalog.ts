@@ -1,4 +1,10 @@
 import type { Language } from './i18n.js'
+import { NETWORK_HALL_RULES } from '../network/hall-rules.js'
+
+export const SEAT_WARNING_MS = 30_000
+const idleSeconds = NETWORK_HALL_RULES.idleMs / 1_000
+const warningSeconds = SEAT_WARNING_MS / 1_000
+const leaseMinutes = NETWORK_HALL_RULES.maxLeaseMs / 60_000
 
 export type RoomId = 'hall' | 'project' | 'night' | 'tide' | 'dimension'
 
@@ -20,8 +26,8 @@ interface LocalizedRoom {
 const CATALOG: readonly LocalizedRoom[] = [
   {
     id: 'hall',
-    zh: { shortName: '大厅', name: '碳基会所', description: '蹬 DSH，没事侃侃，吹水只有八席，其余围观排队。', status: '500 人 · 8 席', rules: ['2 分钟不发言会提醒', '30 秒后自动递补', '单次坐席最多 5 分钟'] },
-    en: { shortName: 'Lobby', name: 'Carbon Club', description: 'Kick back while DSH works. Eight people talk; everyone else watches and queues.', status: '500 people · 8 seats', rules: ['Reminder after 2 idle minutes', 'Automatic rotation after 30 seconds', 'Maximum seat time: 5 minutes'] },
+    zh: { shortName: '大厅', name: '碳基会所', description: '蹬 DSH，没事侃侃，吹水只有八席，其余围观排队。', status: `${NETWORK_HALL_RULES.capacity} 人上限 · ${NETWORK_HALL_RULES.seatCount} 席`, rules: [`${idleSeconds - warningSeconds} 秒不发言会提醒`, `再过 ${warningSeconds} 秒自动递补`, `单次坐席最多 ${leaseMinutes} 分钟`] },
+    en: { shortName: 'Lobby', name: 'Carbon Club', description: 'Kick back while DSH works. Eight people talk; everyone else watches and queues.', status: `${NETWORK_HALL_RULES.capacity}-person limit · ${NETWORK_HALL_RULES.seatCount} seats`, rules: [`Reminder after ${idleSeconds - warningSeconds} idle seconds`, `Rotation ${warningSeconds} seconds later`, `Maximum seat time: ${leaseMinutes} minutes`] },
   },
   {
     id: 'project',
@@ -30,8 +36,8 @@ const CATALOG: readonly LocalizedRoom[] = [
   },
   {
     id: 'night',
-    zh: { shortName: '夜航', name: '夜猫子候车室', description: '本地时间 22:00–04:00 开灯，适合低频陪伴。', status: '夜间开放', rules: ['10 席低频慢聊', '60 秒慢速模式', '天亮自动封存当夜记录'] },
-    en: { shortName: 'Night', name: 'Night Owl Lounge', description: 'Open from 22:00–04:00 local time for low-key late-night company.', status: 'Open at night', rules: ['10 seats for low-frequency chat', '60-second slow mode', 'Nightly log seals at dawn'] },
+    zh: { shortName: '夜航', name: '夜猫子候车室', description: '计划按指定时区 22:00–04:00 开灯，适合低频陪伴。', status: '房型规划中', rules: ['计划 10 席低频慢聊', '计划 60 秒慢速模式', '天亮结束场次，不承诺永久历史'] },
+    en: { shortName: 'Night', name: 'Night Owl Lounge', description: 'Planned for 22:00–04:00 in a stated room timezone, for low-key company.', status: 'Planned', rules: ['Planned: 10 low-frequency seats', 'Planned: 60-second slow mode', 'Sessions end at dawn; no permanent history promised'] },
   },
   {
     id: 'tide',
@@ -40,8 +46,8 @@ const CATALOG: readonly LocalizedRoom[] = [
   },
   {
     id: 'dimension',
-    zh: { shortName: '次元', name: '多次元安全舱', description: '低龄房型概念预告；完成儿童安全与合规审查前不会开放。', status: '合规审查中', rules: ['预设主题和有限反应', '禁止私聊与外链', '需独立儿童安全审核'] },
-    en: { shortName: 'Worlds', name: 'Multiverse Safe Pod', description: 'Concept preview only; it will stay closed pending child-safety and compliance review.', status: 'Compliance review', rules: ['Preset topics and limited reactions', 'No DMs or external links', 'Independent child-safety review required'] },
+    zh: { shortName: '次元', name: '多次元安全舱', description: '低龄房型概念预告；完成儿童安全与合规审查前不会开放。', status: '尚待独立审查', rules: ['预设主题和有限反应', '禁止私聊与外链', '需独立儿童安全审核'] },
+    en: { shortName: 'Worlds', name: 'Multiverse Safe Pod', description: 'Concept preview only; it will stay closed pending child-safety and compliance review.', status: 'Independent review not yet arranged', rules: ['Preset topics and limited reactions', 'No DMs or external links', 'Independent child-safety review required'] },
   },
 ]
 

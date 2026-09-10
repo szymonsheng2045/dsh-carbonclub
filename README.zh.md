@@ -6,9 +6,11 @@
 
 > 蹬 DSH，没事侃侃，吹水只有八席，其余围观排队。
 
-## 开发者预览
+## 当前版本
 
-`0.5.0-beta.2` 面向当前 DSH 开发者预览版（`0.1.1-rc.2`），首版提供一个签名公共大厅：最多 500 个活跃身份，八个发言席。
+**v0.5.1-beta.1** 已发布。相比 0.5.0：修正同时过期候位者的席位推导；使用独立的 0.5.1 topic/sync 通道；社区中继新增只读审查诊断与更严的资源硬上限。0.5.1 客户端不能与 0.5.0 客户端、旧路由缓存组成同一个大厅；双入口并存与分级回退见[升级与回退指引](./docs/UPGRADING-0.5.1.zh.md)，候选验收记录见[候选验收与迁移](./docs/CANDIDATE-0.5.1.zh.md)。
+
+`0.5.1-beta.1` 面向当前 DSH 开发者预览版（`0.1.1-rc.2`），提供一个签名公共大厅：最多 500 个活跃身份，八个发言席。
 
 - 嵌入 DSH Web 界面的响应式、可调宽侧栏。
 - 八席确定性排队；单次坐席五分钟，并有空闲让位、冷却、慢速和防连麦霸屏规则。
@@ -26,10 +28,15 @@
 将预构建 Release 包安装进 DSH profile，无需授权安装期构建脚本：
 
 ```sh
-curl -LO https://github.com/szymonsheng2045/dsh-carbonclub/releases/download/v0.5.0-beta.2/dsh-human-buffer-0.5.0-beta.2.tgz
-dsh plugin --profile carbon-club add ./dsh-human-buffer-0.5.0-beta.2.tgz
-dsh --profile carbon-club web
+curl -LO https://github.com/szymonsheng2045/dsh-carbonclub/releases/download/v0.5.1-beta.1/dsh-human-buffer-0.5.1-beta.1.tgz
+dsh plugin --profile carbon-club add ./dsh-human-buffer-0.5.1-beta.1.tgz
+# dsh rc 给自定义 profile 只装 @deepseek-ai/dsh-base，没有应用层，直接启动会空转无输出；
+# 在 profile 的 package.json 里补入 Web 应用层（幂等一行命令）：
+node -e "const fs=require('fs'),os=require('os'),p=(process.env.DSH_HOME??os.homedir()+'/.dsh')+'/profiles/carbon-club/package.json',m=JSON.parse(fs.readFileSync(p,'utf8')),b=m.dsh.profile.bundles;if(!b.includes('@deepseek-ai/dsh-web-app'))b.splice(1,0,'@deepseek-ai/dsh-web-app');fs.writeFileSync(p,JSON.stringify(m,null,2)+'\n')"
+dsh --profile carbon-club
 ```
+
+注意：`dsh --profile carbon-club web` 会被启动器拒绝（`web` 是内置 web profile 的别名）；`--host`、`--port`、`--no-open` 等应用参数直接跟在 profile 名之后。
 
 源码开发：
 
@@ -39,18 +46,21 @@ cd dsh-carbonclub
 pnpm install
 pnpm check
 dsh plugin --profile carbon-club-dev add .
-dsh --profile carbon-club-dev web
+node -e "const fs=require('fs'),os=require('os'),p=(process.env.DSH_HOME??os.homedir()+'/.dsh')+'/profiles/carbon-club-dev/package.json',m=JSON.parse(fs.readFileSync(p,'utf8')),b=m.dsh.profile.bundles;if(!b.includes('@deepseek-ai/dsh-web-app'))b.splice(1,0,'@deepseek-ai/dsh-web-app');fs.writeFileSync(p,JSON.stringify(m,null,2)+'\n')"
+dsh --profile carbon-club-dev
 ```
 
 仓库会提交 `lib/`，因此从 GitHub 安装时已有入口构建产物。公开测试建议优先使用 Release 压缩包，或锁定具体 commit。
 
 ## 社区联网
 
-碳基会所没有强制中心服务。局域网节点直接发现；跨公网群组连接由社区分别运营的 bootstrap/relay。首台志愿 Mac 中继现可用于邀请测试：
+碳基会所没有强制中心服务。局域网节点直接发现；跨公网群组连接由社区分别运营的 bootstrap/relay。首台志愿 Mac 中继（0.5.1）现可用于公开测试：
 
 ```sh
-DSH_CARBON_CLUB_BOOTSTRAP='/dns4/relay.laozi.art/tcp/443/wss/p2p/12D3KooWLdvJF8g2gt5j7qhrJHtbharz1Tv8dguzUoTt8Saz8uHU' dsh --profile carbon-club web
+DSH_CARBON_CLUB_BOOTSTRAP='/dns4/relay-051.laozi.art/tcp/443/wss/p2p/12D3KooWABxQrMHAVgbeqiVctkAPBFPSPSqCJi1SC4YRZh1hsMrh' dsh --profile carbon-club
 ```
+
+0.5.0 旧入口 `relay.laozi.art` 在过渡窗口内继续为旧版客户端服务（不少于两周）；0.5.0 客户端回退指引见[升级与回退指引](./docs/UPGRADING-0.5.1.zh.md)。
 
 中继只负责发现、字节转发和已签名事件的有界内存缓存，不持有账号库、审核权或永久历史。500 人大厅应至少使用三个独立运营的 WSS 节点，并按 50、100、250、500 人逐级压测。
 
@@ -60,11 +70,11 @@ DSH_CARBON_CLUB_BOOTSTRAP='/dns4/relay.laozi.art/tcp/443/wss/p2p/12D3KooWLdvJF8g
 
 公共大厅文字对网格参与者公开。Noise 保护传输跳点，但不等于公共房间端到端保密。中继运营者仍可观察 Peer ID、网络地址、时间和流量。上一个会话备注默认关闭，只有明确同意后才发送。
 
-漏洞请通过 [GitHub 私密漏洞报告](https://github.com/szymonsheng2045/dsh-carbonclub/security/advisories/new)提交。邀请不受信任的公开用户前，请先阅读[安全政策](./SECURITY.zh.md)和[审查诊断契约](./docs/SECURITY-REVIEW.zh.md)。
+漏洞请通过 [GitHub 私密漏洞报告](https://github.com/szymonsheng2045/dsh-carbonclub/security/advisories/new)或邮件 szymonsheng2045@gmail.com 提交。邀请不受信任的公开用户前，请先阅读[安全政策](./SECURITY.zh.md)和[审查诊断契约](./docs/SECURITY-REVIEW.zh.md)。
 
 ## 社区与支持
 
-构想和节点协作请使用 [GitHub Discussions](https://github.com/szymonsheng2045/dsh-carbonclub/discussions)，可复现缺陷请使用 [GitHub Issues](https://github.com/szymonsheng2045/dsh-carbonclub/issues)。仓库的 `dsh-plugin` topic 用于进入 DSH 插件生态发现入口。
+构想和节点协作请使用 [GitHub Discussions](https://github.com/szymonsheng2045/dsh-carbonclub/discussions)，可复现缺陷请使用 [GitHub Issues](https://github.com/szymonsheng2045/dsh-carbonclub/issues)，运营与举报事务请联系 szymonsheng2045@gmail.com。仓库的 `dsh-plugin` topic 用于进入 DSH 插件生态发现入口。
 
 ## 参与贡献
 

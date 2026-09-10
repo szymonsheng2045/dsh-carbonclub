@@ -4,8 +4,9 @@ import { publicKeyFromProtobuf, publicKeyToProtobuf } from '@libp2p/crypto/keys'
 import { peerIdFromPublicKey } from '@libp2p/peer-id'
 import type { InvitePayload } from './types.js'
 import type { CarbonPrivateKey } from './identity.js'
+import { HALL_PROTOCOL_VERSION } from './protocol.js'
 
-const PREFIX = 'carbon1.'
+const PREFIX = 'carbon2.'
 const MAX_CODE_LENGTH = 16_384
 const MAX_ADDRESSES = 4
 const encoder = new TextEncoder()
@@ -14,7 +15,7 @@ type UnsignedInvitePayload = Omit<InvitePayload, 'publicKey' | 'signature'>
 
 function canonicalInviteBytes(payload: UnsignedInvitePayload): Uint8Array {
   return encoder.encode(JSON.stringify({
-    version: payload.version, roomId: payload.roomId, peerId: payload.peerId,
+    version: payload.version, hallProtocol: payload.hallProtocol, roomId: payload.roomId, peerId: payload.peerId,
     addresses: payload.addresses, issuedAt: payload.issuedAt, expiresAt: payload.expiresAt,
   }))
 }
@@ -36,7 +37,8 @@ export function assertDialAddress(address: string, expectedPeerId: string): void
   const identityComponent = relayed ? components[5] : components[3]
   if ((!direct && !relayed) || identityComponent?.value !== expectedPeerId) throw new Error('Invite address must be a direct or relayed WebSocket libp2p endpoint bound to its peer identity')
   const port = Number(components[1]?.value)
-  if (!Number.isInteger(port) || port < 1_024 || port > 65_535) throw new Error('Invite address uses a disallowed port')
+  const standardTls = port === 443 && names[2] === 'wss'
+  if (!Number.isInteger(port) || (!standardTls && port < 1_024) || port > 65_535) throw new Error('Invite address uses a disallowed port')
   const host = components[0]?.value?.toLowerCase()
   if (host === undefined || host === '0.0.0.0' || host === '::' || host === '255.255.255.255' || host === 'localhost' || host.endsWith('.localhost')) throw new Error('Invite address is not dialable')
   if (names[0] === 'ip4') {
@@ -49,10 +51,11 @@ export function assertDialAddress(address: string, expectedPeerId: string): void
 function assertPayload(value: unknown, now: number): asserts value is InvitePayload {
   if (typeof value !== 'object' || value === null) throw new Error('Invalid Carbon Club invite')
   const candidate = value as Partial<InvitePayload>
-  if (candidate.version !== 1 || candidate.roomId !== 'hall') throw new Error('Unsupported Carbon Club invite')
+  if (candidate.version !== 2 || candidate.hallProtocol !== HALL_PROTOCOL_VERSION) throw new Error('HALL_PROTOCOL_MISMATCH')
+  if (candidate.roomId !== 'hall') throw new Error('Unsupported Carbon Club invite')
   if (typeof candidate.peerId !== 'string' || candidate.peerId.length < 16 || candidate.peerId.length > 160) throw new Error('Invalid invite peer identity')
   if (!Array.isArray(candidate.addresses) || candidate.addresses.length === 0 || candidate.addresses.length > MAX_ADDRESSES) throw new Error('Invite has no usable addresses')
-  if (typeof candidate.issuedAt !== 'number' || typeof candidate.expiresAt !== 'number' || candidate.expiresAt <= candidate.issuedAt) throw new Error('Invalid invite lifetime')
+  if (typeof candidate.issuedAt !== 'number' || typeof candidate.expiresAt !== 'number' || !Number.isSafeInteger(candidate.issuedAt) || !Number.isSafeInteger(candidate.expiresAt) || candidate.issuedAt < 0 || candidate.issuedAt > now + 60_000 || candidate.expiresAt <= candidate.issuedAt) throw new Error('Invalid invite lifetime')
   if (typeof candidate.publicKey !== 'string' || candidate.publicKey.length > 512 || typeof candidate.signature !== 'string' || candidate.signature.length > 512) throw new Error('Invalid invite signature')
   if (candidate.expiresAt < now) throw new Error('Carbon Club invite has expired')
   if (candidate.expiresAt - candidate.issuedAt > 24 * 60 * 60 * 1_000) throw new Error('Invite lifetime is too long')
@@ -75,6 +78,7 @@ export async function signInvite(privateKey: CarbonPrivateKey, payload: Unsigned
 
 export async function decodeInvite(code: string, now = Date.now()): Promise<InvitePayload> {
   const normalized = code.trim()
+  if (normalized.startsWith('carbon1.')) throw new Error('HALL_PROTOCOL_MISMATCH')
   if (!normalized.startsWith(PREFIX) || normalized.length > MAX_CODE_LENGTH) throw new Error('Invalid Carbon Club invite')
   let value: unknown
   try {

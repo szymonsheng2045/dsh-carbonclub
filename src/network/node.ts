@@ -13,7 +13,8 @@ import { peerIdFromString } from '@libp2p/peer-id'
 import { multiaddr } from '@multiformats/multiaddr'
 import { assertDialAddress, decodeInvite, encodeInvite, signInvite } from './invite.js'
 import { NETWORK_HALL_RULES } from './hall-rules.js'
-import { HALL_SYNC_PROTOCOL, HALL_TOPIC } from './protocol.js'
+import { HALL_PROTOCOL_VERSION, HALL_SYNC_PROTOCOL, HALL_TOPIC } from './protocol.js'
+import { BoundedSerialQueue, withStreamDeadline } from './resource-budget.js'
 import type { CarbonPrivateKey, RememberedPeer } from './identity.js'
 import { contentAddressProfile, MAX_SYNC_EVENTS, RoomEventLedger, signCheckpointEvent, signPresenceEvent, signRoomEvent, signSyncRequest, verifyRoomEvent } from './room-events.js'
 import type { ConnectResult, EvidenceBundle, HallPresenceInput, InviteInfo, NetworkStatus, PostRoomMessageInput, RoomDelta, RoomMessage, RoomProfile, RoomSnapshot, SignedRoomEvent } from './types.js'
@@ -33,6 +34,7 @@ const decoder = new TextDecoder()
 const encoder = new TextEncoder()
 
 export interface CarbonClubNodeOptions {
+  readonly listenAddresses?: readonly string[]
   readonly rememberedPeers?: readonly RememberedPeer[]
   readonly persistRememberedPeers?: (peers: readonly RememberedPeer[]) => Promise<void>
   readonly bootstrapAddresses?: readonly string[]
@@ -67,11 +69,12 @@ export class CarbonClubNode {
   private localPresence: { profile: RoomProfile; joinedAt: number } | undefined
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined
   private checkpointTimer: ReturnType<typeof setInterval> | undefined
-  private ingestion = Promise.resolve()
+  private readonly ingestion = new BoundedSerialQueue(64)
   private readonly transportInboundWindows = new Map<string, { startedAt: number; count: number }>()
   private readonly inboundWindows = new Map<string, { startedAt: number; count: number }>()
   private readonly syncWindows = new Map<string, number>()
   private readonly pendingDiscoveryDials = new Set<string>()
+  private readonly identifiedProtocols = new Map<string, readonly string[]>()
 
   constructor(private readonly privateKey: CarbonPrivateKey, private readonly options: CarbonClubNodeOptions = {}) {
     for (const peer of options.rememberedPeers ?? []) this.remembered.set(peer.peerId, peer)
@@ -82,14 +85,19 @@ export class CarbonClubNode {
     try {
       const bootstrapAddresses = [...(this.options.bootstrapAddresses ?? [])]
       const node = await createLibp2p({
+        // Register handlers before relay/bootstrap startup can finish Identify.
+        start: false,
         privateKey: this.privateKey,
         addresses: {
           listen: [
-            '/ip4/0.0.0.0/tcp/0/ws',
+            ...(this.options.listenAddresses ?? ['/ip4/0.0.0.0/tcp/0/ws']),
             ...(this.options.enableRelayReservations === false ? [] : bootstrapAddresses.map(address => `${address}/p2p-circuit`)),
           ],
         },
-        transports: [webSockets(), circuitRelayTransport({ maxReservationQueueLength: 16, reservationConcurrency: 1 })],
+        // FaultTolerance.NO_FATAL = 1 in pinned @libp2p/interface 3.2.5.
+        // An optional relay reservation must not take down local WebSockets.
+        transportManager: { faultTolerance: 1 },
+        transports: [webSockets(), circuitRelayTransport({ maxReservationQueueLength: 16, reservationConcurrency: 2, reservationCompletionTimeout: 8_000 })],
         connectionEncrypters: [noise()],
         streamMuxers: [yamux()],
         peerDiscovery: [
@@ -107,13 +115,29 @@ export class CarbonClubNode {
         },
         services: {
           identify: identify(),
-          pubsub: gossipsub({ allowPublishToZeroTopicPeers: true, emitSelf: false, floodPublish: false, doPX: false, D: 6, Dlo: 4, Dhi: 12, Dout: 2 }),
+          // IP colocation scoring is disabled: gossipsub retains a disconnected
+          // peer's IP for up to retainScore (1h) whenever its score is <= 0, so
+          // honest communities behind one NAT/LAN (and loopback test churn)
+          // accumulate stale entries until every peer sharing that IP crosses the
+          // graylist threshold and is silently ignored. Bulk-Sybil cost is carried
+          // by the hall admission proof of work and the inbound rate limits.
+          pubsub: gossipsub({ allowPublishToZeroTopicPeers: true, emitSelf: false, floodPublish: false, doPX: false, D: 6, Dlo: 4, Dhi: 12, Dout: 2, scoreParams: { IPColocationFactorWeight: 0 } }),
           autoNAT: autoNAT({ timeout: 10_000, maxInboundStreams: 2, maxOutboundStreams: 2 }),
           dcutr: dcutr(),
         },
       })
       this.node = node
-      await node.handle(HALL_SYNC_PROTOCOL, async (stream, connection) => {
+      node.addEventListener('peer:identify', event => {
+        const peerId = event.detail.peerId.toString()
+        this.identifiedProtocols.set(peerId, event.detail.protocols)
+        while (this.identifiedProtocols.size > 128) this.identifiedProtocols.delete(this.identifiedProtocols.keys().next().value!)
+      })
+      node.addEventListener('peer:disconnect', event => {
+        const peerId = event.detail.toString()
+        if (!node.getConnections().some(connection => connection.remotePeer.toString() === peerId)) this.identifiedProtocols.delete(peerId)
+      })
+      await node.handle(HALL_SYNC_PROTOCOL, async (stream, connection) => withStreamDeadline(stream, async () => {
+        stream.maxReadBufferLength = 1_024
         const remotePeerId = connection.remotePeer.toString()
         if (!this.allowSync(remotePeerId)) {
           stream.abort(new Error('Room sync rate limit exceeded'))
@@ -151,7 +175,7 @@ export class CarbonClubNode {
         }
         stream.send(data)
         await stream.close()
-      }, { maxInboundStreams: 2, maxOutboundStreams: 2, runOnLimitedConnection: true })
+      }), { maxInboundStreams: 2, maxOutboundStreams: 2, runOnLimitedConnection: true })
       node.addEventListener('peer:discovery', event => {
         const peerId = event.detail.id.toString()
         if (peerId === node.peerId.toString()) return
@@ -176,21 +200,26 @@ export class CarbonClubNode {
         globalThis.setTimeout(() => { void this.requestHistory(peerId) }, 350)
       })
       node.services.pubsub.addEventListener('message', event => {
+        if (process.env.DSH_CARBON_CLUB_DEBUG === '1') console.warn(`[carbon-club] gossipsub-inbound bytes=${event.detail.data.byteLength} type=${event.detail.type}`)
         if (event.detail.topic !== HALL_TOPIC || event.detail.data.byteLength > MAX_EVENT_BYTES) return
         const transportOrigin = event.detail.type === 'signed' ? event.detail.from.toString() : ''
         if (!this.allowTransportInbound(transportOrigin)) return
-        this.ingestion = this.ingestion.then(async () => {
+        this.ingestion.enqueue(async () => {
           try {
             const parsed: unknown = JSON.parse(decoder.decode(event.detail.data))
             const signed = await verifyRoomEvent(parsed)
+            if (process.env.DSH_CARBON_CLUB_DEBUG === '1') console.warn(`[carbon-club] recv ${signed.kind} origin=${signed.origin.slice(0, 16)} seq=${signed.sequence}`)
             if (!this.allowInbound(signed.origin)) return
             if (signed.kind === 'room.sync.request') return
             this.ledger.accept(signed)
           } catch {
+            if (process.env.DSH_CARBON_CLUB_DEBUG === '1') console.warn('[carbon-club] drop invalid inbound event')
             // Invalid, forged, stale, out-of-order and oversized events are intentionally dropped.
           }
         })
       })
+      await node.start()
+      if ((this.options.listenAddresses?.length ?? 1) > 0 && node.getMultiaddrs().length === 0) throw new Error('No usable local or relay listener')
       node.services.pubsub.subscribe(HALL_TOPIC)
       this.phase = 'online'
       this.checkpointTimer = setInterval(() => { void this.publishCheckpoint().catch(() => {}) }, 30_000)
@@ -205,6 +234,10 @@ export class CarbonClubNode {
       }
       for (const peer of this.remembered.values()) void this.connectRemembered(peer)
     } catch (error) {
+      const failedNode = this.node
+      this.node = undefined
+      this.identifiedProtocols.clear()
+      try { await failedNode?.stop() } catch { /* preserve the original startup error */ }
       this.phase = 'error'
       this.startupError = errorMessage(error)
       throw error
@@ -233,6 +266,7 @@ export class CarbonClubNode {
       discoveredPeers: this.discovered.size,
       bootstrapConfigured: this.options.bootstrapAddresses?.length ?? 0,
       relayAddresses: node.getMultiaddrs().filter(address => address.toString().includes('/p2p-circuit')).length,
+      ...(this.startupError === undefined ? {} : { error: this.startupError }),
     }
   }
 
@@ -242,21 +276,23 @@ export class CarbonClubNode {
     if (addresses.length === 0) throw new Error('Carbon Club node has no dialable WebSocket address')
     const expiresAt = now + INVITE_TTL_MS
     const peerId = node.peerId.toString()
-    const code = encodeInvite(await signInvite(this.privateKey, { version: 1, roomId: 'hall', peerId, addresses, issuedAt: now, expiresAt }))
+    const code = encodeInvite(await signInvite(this.privateKey, { version: 2, hallProtocol: HALL_PROTOCOL_VERSION, roomId: 'hall', peerId, addresses, issuedAt: now, expiresAt }))
     return { code, peerId, addresses, expiresAt }
   }
 
   async connect(code: string): Promise<ConnectResult> {
     const node = this.requiredNode()
     const invite = await decodeInvite(code)
-    await this.rememberPeer(invite.peerId, invite.addresses)
     await this.preparePeer(invite.peerId, invite.addresses)
     let lastError: unknown
     for (const address of invite.addresses) {
       try {
         await node.dial(multiaddr(address), { signal: AbortSignal.timeout(DIAL_TIMEOUT_MS) })
+        await this.verifyPeerProtocol(invite.peerId)
+        await this.rememberPeer(invite.peerId, invite.addresses)
         return { connected: true, peerId: invite.peerId }
       } catch (error) {
+        if (error instanceof Error && error.message === 'HALL_PROTOCOL_MISMATCH') throw error
         lastError = error
       }
     }
@@ -265,6 +301,27 @@ export class CarbonClubNode {
 
   roomSnapshot(now = Date.now()): RoomSnapshot {
     return this.ledger.snapshot(now, this.node?.peerId.toString())
+  }
+
+  /** Read-only compatibility diagnostic on an existing authenticated connection.
+   * An Identify advertisement is not proof that a peer behaves honestly. */
+  async verifyPeerProtocol(peerId: string): Promise<void> {
+    const node = this.requiredNode()
+    const connection = node.getConnections().find(item => item.remotePeer.toString() === peerId)
+    if (connection === undefined) throw new Error('PEER_NOT_CONNECTED')
+    // Reuse the automatic Identify result. Opening another Identify stream races
+    // libp2p's one-stream limit during a new dial or rapid reconnection.
+    const deadline = Date.now() + DIAL_TIMEOUT_MS
+    while (Date.now() < deadline && this.node === node) {
+      const protocols = this.identifiedProtocols.get(peerId)
+      if (protocols !== undefined) {
+        if (!protocols.includes(HALL_SYNC_PROTOCOL)) throw new Error('HALL_PROTOCOL_MISMATCH')
+        return
+      }
+      if (!node.getConnections().some(item => item.remotePeer.toString() === peerId)) throw new Error('PEER_NOT_CONNECTED')
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+    throw new Error('PEER_PROTOCOL_CHECK_TIMEOUT')
   }
 
   roomDelta(afterCursor: number, now = Date.now()): RoomDelta {
@@ -278,8 +335,15 @@ export class CarbonClubNode {
   }
 
   async joinHall(profile: RoomProfile, now = Date.now()): Promise<RoomSnapshot> {
-    this.requiredNode()
+    const localPeerId = this.requiredNode().peerId.toString()
     profile = contentAddressProfile(profile)
+    const admissionError = this.ledger.admissionError(localPeerId, now)
+    if (admissionError !== undefined) {
+      this.clearLocalPresence()
+      throw new Error(admissionError)
+    }
+    const before = this.roomSnapshot(now)
+    if (!before.seats.some(seat => seat?.participant.peerId === localPeerId) && before.localQueuePosition === undefined) this.clearLocalPresence()
     const previousPresence = this.localPresence
     const joinedAt = previousPresence?.joinedAt ?? now
     const action: HallPresenceInput['action'] = previousPresence === undefined ? 'join' : 'heartbeat'
@@ -293,11 +357,13 @@ export class CarbonClubNode {
     this.ledger.accept(event)
     await this.publishEvent(event)
     const snapshot = this.roomSnapshot(now)
-    const localPeerId = this.requiredNode().peerId.toString()
     const admitted = snapshot.seats.some(seat => seat?.participant.peerId === localPeerId)
-      || snapshot.queue.some(participant => participant.peerId === localPeerId)
+      || snapshot.localQueuePosition !== undefined
     if (admitted) this.ensureHeartbeat()
-    else this.clearLocalPresence()
+    else {
+      this.clearLocalPresence()
+      throw new Error('HALL_ADMISSION_PENDING')
+    }
     return snapshot
   }
 
@@ -340,6 +406,7 @@ export class CarbonClubNode {
     this.heartbeatTimer = undefined
     this.checkpointTimer = undefined
     this.node = undefined
+    this.identifiedProtocols.clear()
     this.phase = 'starting'
     await node.stop()
   }
@@ -418,8 +485,15 @@ export class CarbonClubNode {
     const node = this.requiredNode()
     const data = encoder.encode(JSON.stringify(event))
     if (data.byteLength > MAX_EVENT_BYTES) throw new Error('Room event exceeds the network byte budget')
-    const pubsub = node.services.pubsub as { publish(topic: string, data: Uint8Array): Promise<unknown> }
-    await pubsub.publish(HALL_TOPIC, data)
+    const pubsub = node.services.pubsub as { publish(topic: string, data: Uint8Array): Promise<unknown>, mesh?: Map<string, Set<string>>, topics?: Map<string, Set<string>> }
+    if (process.env.DSH_CARBON_CLUB_DEBUG === '1') {
+      console.warn(`[carbon-club] publish ${event.kind} mesh=${pubsub.mesh?.get(HALL_TOPIC)?.size ?? -1} topicPeers=${pubsub.topics?.get(HALL_TOPIC)?.size ?? -1} bytes=${data.byteLength}`)
+    }
+    const result = await pubsub.publish(HALL_TOPIC, data)
+    if (process.env.DSH_CARBON_CLUB_DEBUG === '1') {
+      const recipients = (result as { recipients?: unknown[] } | undefined)?.recipients?.length ?? -1
+      console.warn(`[carbon-club] published ${event.kind} seq=${event.sequence} recipients=${recipients}`)
+    }
   }
 
   private requiredNode(): Libp2p {

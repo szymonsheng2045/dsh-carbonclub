@@ -5,7 +5,9 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import { HALL_RULES } from './hall-machine.js'
 import { COPY, type Language } from './i18n.js'
 import { setLanguage, useLanguage } from './language-store.js'
-import { roomsFor, type RoomId } from './room-catalog.js'
+import { roomsFor, SEAT_WARNING_MS, type RoomId } from './room-catalog.js'
+import { draftAfterSend, shouldSubmit } from './composer.js'
+import { defaultName, loadName, MAX_NAME_LENGTH, normalizeName, saveName } from './profile.js'
 import { setPanelOpen, setPanelWidth, togglePanel, usePanelSnapshot } from './panel-store.js'
 import { connectWithInvite, joinNetworkHall, leaveNetworkHall, postNetworkMessage, requestEvidence, requestInvite, useNetworkSnapshot } from './network-store.js'
 import type { HallSeat, RoomMessage, RoomProfile } from '../network/types.js'
@@ -83,7 +85,7 @@ function HallSeatGrid({ seats, avatars, localPeerId, language }: { readonly seat
   return <div className="hb-seats">
     {seats.map((seat, index) => {
       const participant = seat?.participant
-      const warning = seat !== null && seat !== undefined && seat.idleExpiresAt - Date.now() <= 30_000
+      const warning = seat !== null && seat !== undefined && Math.min(seat.idleExpiresAt, seat.leaseExpiresAt) - Date.now() <= SEAT_WARNING_MS
       return <div className="hb-seat" data-warning={warning || undefined} data-local={participant?.peerId === localPeerId || undefined} key={index}>
         <span className="hb-seat-avatar" style={{ '--seat-color': participant === undefined ? '#d6d9dd' : peerColor(participant.peerId) } as React.CSSProperties}>{participant?.profile.avatarCid !== undefined && avatars[participant.profile.avatarCid] !== undefined && <img src={avatars[participant.profile.avatarCid]} alt="" />}</span>
         <div className="hb-seat-copy">
@@ -114,7 +116,7 @@ function MeshMessages({ messages, profiles, avatars, blockedPeers, language, onB
   const copy = COPY[language]
   const visible = messages.filter(message => !blockedPeers.has(message.origin))
   if (visible.length === 0) return <div className="hb-mesh-empty">{copy.meshEmpty}</div>
-  return <div className="hb-messages hb-mesh-messages">{visible.slice(-30).map(message => {
+  return <div className="hb-messages hb-mesh-messages">{visible.map(message => {
     const profile = profiles[message.origin] ?? { name: `${message.origin.slice(0, 8)}…` }
     return <div className="hb-message" key={message.id}>
     <span className="hb-message-avatar" style={{ '--member-color': peerColor(message.origin) } as React.CSSProperties}>{profile.avatarCid !== undefined && avatars[profile.avatarCid] !== undefined && <img src={avatars[profile.avatarCid]} alt="" />}</span>
@@ -131,15 +133,19 @@ function NetworkCard({ language }: { readonly language: Language }) {
   const network = useNetworkSnapshot()
   const [joinCode, setJoinCode] = useState('')
   const [copied, setCopied] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
   const peerLabel = network.peerId === undefined ? copy.peerPending : `${network.peerId.slice(0, 8)}…${network.peerId.slice(-6)}`
   const statusLabel = network.phase === 'online' ? copy.nodeOnline(network.connectedPeers) : network.phase === 'error' ? copy.nodeError : copy.nodeStarting
   const displayedError = networkErrorLabel(network.actionError ?? network.error, language)
 
   async function copyInvite(): Promise<void> {
     if (network.invite === undefined) return
-    await navigator.clipboard.writeText(network.invite.code)
-    setCopied(true)
-    window.setTimeout(() => { setCopied(false) }, 1_500)
+    setCopyFailed(false)
+    try {
+      await navigator.clipboard.writeText(network.invite.code)
+      setCopied(true)
+      window.setTimeout(() => { setCopied(false) }, 1_500)
+    } catch { setCopyFailed(true) }
   }
 
   return <section className="hb-network" data-phase={network.phase}>
@@ -150,7 +156,9 @@ function NetworkCard({ language }: { readonly language: Language }) {
     {network.invite !== undefined && <div className="hb-invite-output"><input readOnly value={network.invite.code} aria-label={copy.inviteCode} /><button type="button" onClick={() => { void copyInvite() }}>{copied ? copy.copied : copy.copy}</button></div>}
     <div className="hb-join"><input value={joinCode} placeholder={copy.pasteInvite} aria-label={copy.pasteInvite} onChange={event => { setJoinCode(event.target.value) }} /><button type="button" disabled={joinCode.trim() === '' || network.busy !== undefined} onClick={() => { void connectWithInvite(joinCode).then(connected => { if (connected) setJoinCode('') }) }}>{network.busy === 'connect' ? copy.connecting : copy.connectPeer}</button></div>
     {displayedError !== undefined && <div className="hb-network-error" role="alert">{displayedError}</div>}
+    {copyFailed && <div className="hb-network-error" role="alert">{copy.copyFailed}</div>}
     <div className="hb-network-note">{copy.networkNote(network.discoveredPeers, network.bootstrapConfigured, network.relayAddresses)}</div>
+    <div className="hb-network-note">{copy.protocolHint}</div>
   </section>
 }
 
@@ -186,12 +194,19 @@ export function HumanBufferOverlay({ useSessions }: OverlayProps) {
   })
   const [roomId, setRoomId] = useState<RoomId>('hall')
   const [draft, setDraft] = useState('')
+  const [localName, setLocalName] = useState(loadName)
+  const [nameDraft, setNameDraft] = useState(loadName)
   const [localAvatar, setLocalAvatar] = useState<string | undefined>(loadLocalAvatar)
   const [avatarError, setAvatarError] = useState<string>()
   const [shareLastSession, setShareLastSession] = useState(false)
   const [blockedPeers, setBlockedPeers] = useState<Set<string>>(loadBlockedPeers)
   const [evidenceCopied, setEvidenceCopied] = useState(false)
+  const [evidenceCopyFailed, setEvidenceCopyFailed] = useState(false)
+  const [unreadMessages, setUnreadMessages] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const followMessages = useRef(true)
+  const resizeCleanup = useRef<(() => void) | undefined>(undefined)
+  useEffect(() => () => { resizeCleanup.current?.() }, [])
   const rooms = useMemo(() => roomsFor(language), [language])
   const room = rooms.find(candidate => candidate.id === roomId) ?? rooms[0]!
   const localLastCompletedSession = useSessions(state => {
@@ -206,14 +221,30 @@ export function HumanBufferOverlay({ useSessions }: OverlayProps) {
 
   useEffect(() => {
     if (!panel.open || roomId !== 'hall') return
+    followMessages.current = true
+    setUnreadMessages(false)
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
-  }, [panel.open, roomId, network.room?.messages.length])
+  }, [panel.open, roomId])
+
+  useEffect(() => {
+    if (!panel.open || roomId !== 'hall') return
+    if (network.room?.messages.at(-1) === undefined) { setUnreadMessages(false); return }
+    if (followMessages.current) scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
+    else setUnreadMessages(true)
+  }, [network.room?.messages.at(-1)?.id, panel.open, roomId])
+
+  useEffect(() => {
+    if (!panel.open) return
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setPanelOpen(false) }
+    window.addEventListener('keydown', escape)
+    return () => { window.removeEventListener('keydown', escape) }
+  }, [panel.open])
 
   const localProfile = useMemo<RoomProfile>(() => ({
-    name: language === 'zh' ? '你 · 本机人类' : 'You · Local human',
+    name: localName || defaultName(network.peerId),
     ...(localAvatar === undefined ? {} : { avatarUrl: localAvatar }),
     ...(!shareLastSession || localLastCompletedSession === undefined ? {} : { lastCompletedSession: localLastCompletedSession }),
-  }), [language, localAvatar, localLastCompletedSession, shareLastSession])
+  }), [localName, network.peerId, localAvatar, localLastCompletedSession, shareLastSession])
   const seats = network.room?.seats ?? Array.from({ length: HALL_RULES.seatCount }, () => null)
   const localSeated = network.peerId !== undefined && seats.some(seat => seat?.participant.peerId === network.peerId)
   const localQueuePosition = network.room?.localQueuePosition
@@ -229,26 +260,32 @@ export function HumanBufferOverlay({ useSessions }: OverlayProps) {
   const queueCopy = useMemo(() => {
     if (localSeated) return [copy.seatedSelf, copy.seatedSelfHint] as const
     if (localQueuePosition !== undefined) return [copy.queuePosition(localQueuePosition), copy.queuePositionHint] as const
-    return [copy.audienceCount(network.room?.queueCount ?? 0), copy.audienceHint] as const
+    return [copy.queuedCount(network.room?.queueCount ?? 0), copy.audienceHint] as const
   }, [copy, localQueuePosition, localSeated, network.room?.queueCount])
 
   function beginResize(event: ReactPointerEvent<HTMLDivElement>): void {
     event.preventDefault()
+    resizeCleanup.current?.()
     const startX = event.clientX
     const startWidth = panel.width
     const move = (next: PointerEvent) => { setPanelWidth(startWidth + startX - next.clientX) }
     const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+      resizeCleanup.current = undefined
     }
+    resizeCleanup.current = up
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up, { once: true })
+    window.addEventListener('pointercancel', up, { once: true })
   }
 
   async function send(): Promise<void> {
-    if (draft.trim() === '') return
+    if (draft.trim() === '' || network.posting) return
+    const submittedDraft = draft
     const body = draft.trim()
-    if (localSeated && network.phase === 'online' && await postNetworkMessage({ body })) setDraft('')
+    if (localSeated && network.phase === 'online' && await postNetworkMessage({ body })) setDraft(current => draftAfterSend(current, submittedDraft))
   }
 
   async function uploadAvatar(event: ChangeEvent<HTMLInputElement>): Promise<void> {
@@ -276,11 +313,14 @@ export function HumanBufferOverlay({ useSessions }: OverlayProps) {
   }
 
   async function copyEvidence(eventId: string): Promise<void> {
+    setEvidenceCopyFailed(false)
     const evidence = await requestEvidence(eventId)
     if (evidence === undefined) return
-    await navigator.clipboard.writeText(JSON.stringify(evidence, null, 2))
-    setEvidenceCopied(true)
-    window.setTimeout(() => { setEvidenceCopied(false) }, 1_500)
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(evidence, null, 2))
+      setEvidenceCopied(true)
+      window.setTimeout(() => { setEvidenceCopied(false) }, 1_500)
+    } catch { setEvidenceCopyFailed(true) }
   }
 
   return <div className="hb-layer" data-open={panel.open || undefined}>
@@ -313,7 +353,11 @@ export function HumanBufferOverlay({ useSessions }: OverlayProps) {
         >{candidate.shortName}</button>)}
       </nav>
 
-      <div className="hb-scroll" ref={scrollRef}>
+      <div className="hb-scroll" ref={scrollRef} onScroll={event => {
+        const scroll = event.currentTarget
+        followMessages.current = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 80
+        if (followMessages.current) setUnreadMessages(false)
+      }}>
         <section className="hb-room-card">
           <div className="hb-room-row"><span className="hb-room-name">{room.name}</span><span className="hb-room-status">{room.status}</span></div>
           <p className="hb-room-desc">{room.description}</p>
@@ -327,8 +371,14 @@ export function HumanBufferOverlay({ useSessions }: OverlayProps) {
             <span className="hb-avatar-action">{localAvatar === undefined ? copy.uploadAvatar : copy.changeAvatar}</span>
             <input className="hb-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={event => { void uploadAvatar(event) }} />
           </label>
-          <span className="hb-net">{copy.roomLive}</span>
+          <span className="hb-net">{network.phase === 'online' ? copy.roomLive : network.phase === 'error' ? copy.nodeError : copy.nodeStarting}</span>
         </div>
+        <label className="hb-name-field">{copy.nickname}<input aria-label={copy.nickname} maxLength={MAX_NAME_LENGTH} value={nameDraft} placeholder={defaultName(network.peerId)} onChange={event => { setNameDraft(event.target.value) }} onBlur={() => {
+          const name = normalizeName(nameDraft)
+          setLocalName(name)
+          setNameDraft(name)
+          saveName(name)
+        }} /></label>
         <label className="hb-share-session"><input type="checkbox" checked={shareLastSession} onChange={event => { setShareLastSession(event.target.checked) }} />{copy.shareLastSession}</label>
         {blockedPeers.size > 0 && <div className="hb-blocked-summary"><span>{copy.blockedCount(blockedPeers.size)}</span><button type="button" onClick={() => { const next = new Set<string>(); setBlockedPeers(next); saveBlockedPeers(next) }}>{copy.clearBlocked}</button></div>}
         {avatarError !== undefined && <div className="hb-avatar-error" role="alert">{avatarError}</div>}
@@ -344,10 +394,11 @@ export function HumanBufferOverlay({ useSessions }: OverlayProps) {
             </div>
             <button className="hb-queue-button" data-queued={participating || undefined} disabled={network.phase !== 'online' || network.busy !== undefined} type="button" onClick={() => {
               void (participating ? leaveNetworkHall() : joinNetworkHall(localProfile))
-            }}>{participating ? copy.leaveQueue : copy.joinQueue}</button>
+            }}>{localSeated ? copy.leaveSeat : queued ? copy.leaveQueue : copy.joinQueue}</button>
           </div>
           <div className="hb-section-head"><span className="hb-section-title">{copy.meshChat}</span><span className="hb-section-note">{copy.signedEvents(network.room?.messages.length ?? 0)}</span></div>
           {evidenceCopied && <div className="hb-evidence-copied" role="status">{copy.evidenceCopied}</div>}
+          {evidenceCopyFailed && <div className="hb-network-error" role="alert">{copy.evidenceCopyFailed}</div>}
           <MeshMessages messages={network.room?.messages ?? []} profiles={network.room?.profiles ?? {}} avatars={network.room?.avatars ?? {}} blockedPeers={blockedPeers} language={language} onBlock={blockPeer} onEvidence={eventId => { void copyEvidence(eventId) }} />
         </> : <div className="hb-empty-room">
           <div><div className="hb-empty-mark">◇</div>{copy.lockedRoom}<br />{copy.p2pComing}</div>
@@ -355,11 +406,16 @@ export function HumanBufferOverlay({ useSessions }: OverlayProps) {
       </div>
 
       {roomId === 'hall' && <footer className="hb-compose">
+        {unreadMessages && <button type="button" className="hb-unread" onClick={() => {
+          followMessages.current = true
+          setUnreadMessages(false)
+          scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
+        }}>{copy.newMessages}</button>}
         <div className="hb-compose-box">
           <textarea value={draft} maxLength={HALL_RULES.maxMessageLength} disabled={!localSeated} placeholder={localSeated ? copy.seatedPlaceholder : copy.audiencePlaceholder} onChange={event => { setDraft(event.target.value) }} onKeyDown={event => {
-            if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send() }
+            if (shouldSubmit({ key: event.key, shiftKey: event.shiftKey, isComposing: event.nativeEvent.isComposing, keyCode: event.keyCode })) { event.preventDefault(); void send() }
           }} />
-          <button className="hb-send" type="button" disabled={!localSeated || draft.trim() === ''} onClick={() => { void send() }}>{copy.send}</button>
+          <button className="hb-send" type="button" disabled={!localSeated || network.phase !== 'online' || network.posting || draft.trim() === ''} onClick={() => { void send() }}>{network.posting ? copy.sending : copy.send}</button>
         </div>
         <div className="hb-compose-hint"><span>{copy.zeroModel}</span><span>{draft.length}/{HALL_RULES.maxMessageLength}</span></div>
       </footer>}

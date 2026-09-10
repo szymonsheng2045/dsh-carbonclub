@@ -9,7 +9,7 @@ import { tcp } from '@libp2p/tcp'
 import { identify } from '@libp2p/identify'
 import { gossipsub } from '@libp2p/gossipsub'
 import { circuitRelayServer } from '@libp2p/circuit-relay-v2'
-import { HALL_SYNC_PROTOCOL, HALL_TOPIC, RoomEventLedger, verifyRoomEvent } from '../lib/relay-runtime.js'
+import { HALL_SYNC_PROTOCOL, HALL_TOPIC, RoomEventLedger, verifyRoomEvent, withStreamDeadline } from '../lib/relay-runtime.js'
 import { startReviewServer, stopReviewServer } from './review-server.mjs'
 
 const keyFile = resolve(process.env.CARBON_RELAY_KEY_FILE ?? './data/carbon-relay.key')
@@ -63,7 +63,10 @@ const node = await createLibp2p({
   connectionManager: { maxConnections, maxIncomingPendingConnections: 128, inboundConnectionThreshold: 128 },
   services: {
     identify: identify(),
-    pubsub: gossipsub({ allowPublishToZeroTopicPeers: true, emitSelf: false, doPX: false, D: 256, Dlo: 128, Dhi: 600, Dout: 64 }),
+    // Match clients: stale same-IP peers must not graylist honest NAT churn.
+    // This removes the P6 concentration penalty, not the other scoring rules.
+    // Per-origin budgets and PoW do not eliminate Sybil/eclipsing risk.
+    pubsub: gossipsub({ allowPublishToZeroTopicPeers: true, emitSelf: false, doPX: false, D: 256, Dlo: 128, Dhi: 600, Dout: 64, scoreParams: { IPColocationFactorWeight: 0 } }),
     relay: circuitRelayServer({
       reservations: {
         maxReservations, reservationTtl: 60 * 60 * 1_000,
@@ -97,7 +100,8 @@ node.services.pubsub.addEventListener('message', event => {
     .catch(() => {})
     .finally(() => { pendingVerifications -= 1 })
 })
-await node.handle(HALL_SYNC_PROTOCOL, async (stream, connection) => {
+await node.handle(HALL_SYNC_PROTOCOL, async (stream, connection) => withStreamDeadline(stream, async () => {
+  stream.maxReadBufferLength = 1_024
   const peerId = connection.remotePeer.toString()
   const now = Date.now()
   const previous = syncWindows.get(peerId) ?? 0
@@ -151,7 +155,7 @@ await node.handle(HALL_SYNC_PROTOCOL, async (stream, connection) => {
   }
   stream.send(data)
   await stream.close()
-}, { maxInboundStreams: 4, maxOutboundStreams: 4, runOnLimitedConnection: true })
+}), { maxInboundStreams: 4, maxOutboundStreams: 4, runOnLimitedConnection: true })
 const addresses = node.getMultiaddrs().map(address => address.toString())
 const packageVersion = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version
 const reviewServer = reviewPort > 0 ? await startReviewServer({

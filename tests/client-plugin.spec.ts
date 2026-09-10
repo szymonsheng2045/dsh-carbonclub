@@ -43,6 +43,7 @@ describe('client plugin integration shape', () => {
     expect(ROOMS.find(room => room.id === 'hall')?.name).toBe('碳基会所')
     expect(ROOMS.find(room => room.id === 'hall')?.description).toBe('蹬 DSH，没事侃侃，吹水只有八席，其余围观排队。')
     expect(ROOMS.find(room => room.id === 'hall')?.rules).toContain('单次坐席最多 5 分钟')
+    expect(ROOMS.find(room => room.id === 'hall')?.rules).toContain('90 秒不发言会提醒')
     expect(roomsFor('en').find(room => room.id === 'hall')).toEqual(expect.objectContaining({ name: 'Carbon Club', shortName: 'Lobby' }))
     expect(roomsFor('en').every(room => room.rules.length >= 3)).toBe(true)
   })

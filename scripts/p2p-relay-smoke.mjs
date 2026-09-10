@@ -89,6 +89,7 @@ try {
   await client.start()
   await waitFor(() => client.status().connectedPeers >= 1)
   await waitFor(() => client.status().relayAddresses >= 1)
+  await client.verifyPeerProtocol(relay.peerId.toString())
   await waitFor(() => relay.services.pubsub.getSubscribers(HALL_TOPIC).length >= 1)
   await client.joinHall({ name: 'relay-first' })
   const sent = await client.publishHallMessage({ body: 'Relay memory cache restores this message.' })

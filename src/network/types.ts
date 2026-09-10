@@ -24,7 +24,8 @@ export interface ConnectResult {
 }
 
 export interface InvitePayload {
-  readonly version: 1
+  readonly version: 2
+  readonly hallProtocol: string
   readonly roomId: 'hall'
   readonly peerId: string
   readonly addresses: readonly string[]

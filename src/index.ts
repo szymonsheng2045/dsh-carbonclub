@@ -104,6 +104,9 @@ export class CarbonClubService extends TypertRemoteService {
       const privateKey = await loadOrCreatePrivateKey(this.ctx.credentials)
       const rememberedPeers = await loadRememberedPeers(this.ctx.credentials)
       const node = new CarbonClubNode(privateKey, {
+        ...(process.env.DSH_CARBON_CLUB_LOCAL_ONLY === '1' ? {
+          listenAddresses: ['/ip4/127.0.0.1/tcp/0/ws'], enableMdns: false,
+        } : {}),
         rememberedPeers,
         persistRememberedPeers: peers => saveRememberedPeers(this.ctx.credentials, peers),
         bootstrapAddresses: (process.env.DSH_CARBON_CLUB_BOOTSTRAP ?? '').split(',').map(value => value.trim()).filter(value => value.length > 0).slice(0, 8),

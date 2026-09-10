@@ -1,4 +1,6 @@
-# Carbon Club protocol 0.5
+# Carbon Club protocol 0.5.1 (unpublished candidate)
+
+0.5.1 changes deterministic simultaneous-expiry handling: expired queued peers are removed before filling vacated seats and do not acquire a speaking-seat cooldown. It is not state-compatible with 0.5.0. Clients and state-caching routers must move together to separate topic/sync channels; no transparent bridge or historical import is enabled. Production remains unchanged until an approved migration.
 
 ## Product boundary
 
@@ -7,7 +9,7 @@ Carbon Club is a human-to-human side channel. Room traffic must never be appende
 The public beta enables only `roomId = hall` on topic:
 
 ```text
-/dsh-human-buffer/room/hall/0.5.0
+/dsh-human-buffer/room/hall/0.5.1
 ```
 
 Other visible room types are roadmap previews and do not subscribe or publish.
@@ -62,11 +64,13 @@ Heartbeats omit unchanged profiles. Message records reference only the author Pe
 
 The Host retains at most 200 derived messages and 2,200 signed state events. Each active identity's join basis and latest heartbeat are protected from rolling-log eviction. Per-origin sequence high-water marks use a 1,500-entry ceiling: active identities are protected and the oldest inactive marks are evicted. Live replay of an evicted join remains blocked by the 30-second join freshness rule, while a historical catch-up join without a fresh heartbeat cannot become active. Each accepted state event advances a local cursor. Browser RPC begins with a reset snapshot and then receives new messages, eight seats, exact queue count/local position, at most 24 queue-preview records and filtered profile/avatar maps. A cursor older than retained history forces a bounded reset.
 
-Late-node catch-up uses `/dsh-human-buffer/sync/hall/0.5.0`, a negotiated libp2p stream over an already authenticated connection. The requester sends a bounded JSON request frame (`version: 1`, the hall topic; at most 1 KiB) and half-closes its write side. The responder aborts as soon as the request crosses 1 KiB, rather than continuing to consume an oversized stream; after a valid FIN it sends one response and half-closes. This explicit handshake avoids a Yamux open/close race. A Host responds only once per minute per connected Peer ID. One response contains at most 1,300 individually signed events and 8 MiB: active join bases, latest heartbeats, recent messages and the latest checkpoint. Receivers raise the stream read buffer to the same 8 MiB hard limit because libp2p's 4 MiB default is too small for the 500-person worst case. The response is not republished to the public GossipSub topic, eliminating room-wide sync amplification. Receivers verify every event independently; the responding peer or router cannot forge a roster.
+Late-node catch-up uses `/dsh-human-buffer/sync/hall/0.5.1`, a negotiated libp2p stream over an already authenticated connection. The requester sends a bounded JSON request frame (`version: 1`, the hall topic; at most 1 KiB) and half-closes its write side. The responder aborts as soon as the request crosses 1 KiB, rather than continuing to consume an oversized stream; after a valid FIN it sends one response and half-closes. This explicit handshake avoids a Yamux open/close race. A Host responds only once per minute per connected Peer ID. One response contains at most 1,300 individually signed events and 8 MiB: active join bases, latest heartbeats, recent messages and the latest checkpoint. Receivers raise the stream read buffer to the same 8 MiB hard limit because libp2p's 4 MiB default is too small for the 500-person worst case. The response is not republished to the public GossipSub topic, eliminating room-wide sync amplification. Receivers verify every event independently; the responding peer or router cannot forge a roster.
+
+Standard port 443 is allowed only with WSS; other ports below 1024 remain rejected. All identity, signature, address-shape and TLS checks still apply. A valid invitation is not proof that the peer speaks the same hall protocol; users must check the displayed protocol and operator's release information.
 
 ## Connectivity
 
-Each Host uses Noise, Yamux, WebSockets, GossipSub and mDNS. A client keeps a small topic mesh (`D=6`, `Dlo=4`, `Dhi=12`), stops discovery auto-dialing at 12 peers, permits at most four parallel discovery dials and caps total connections at 64. Direct invites bind every advertised direct or `/p2p-circuit` address to the expected Peer ID, carry the creator's Ed25519 public key and signature, expire after 30 minutes, allow at most four addresses and reject malformed, privileged-port, wildcard, multicast and link-local targets.
+Each Host uses Noise, Yamux, WebSockets, GossipSub and mDNS. A client keeps a small topic mesh (`D=6`, `Dlo=4`, `Dhi=12`), stops discovery auto-dialing at 12 peers, permits at most four parallel discovery dials and caps total connections at 64. Direct invites bind every advertised direct or `/p2p-circuit` address to the expected Peer ID, carry the creator's Ed25519 public key and signature, expire after 30 minutes, allow at most four addresses and reject malformed, privileged-port (except WSS 443), wildcard, multicast and link-local targets. Protocol 0.5.1 uses carbon2 invitations with a signed hallProtocol field. Legacy carbon1 and mismatched protocol invitations are rejected before dialing; both peers must upgrade and regenerate invitations. A successful explicit connection additionally requires the authenticated peer to advertise the current hall sync protocol. This detects accidental version mixing, not a dishonest peer claiming compatibility. Automatic bootstrap transport connectivity alone does not certify hall compatibility; the public relay probe checks both.
 
 `DSH_CARBON_CLUB_BOOTSTRAP` accepts up to eight comma-separated community multiaddresses. For each configured relay, the Host:
 
@@ -77,6 +81,10 @@ Each Host uses Noise, Yamux, WebSockets, GossipSub and mDNS. A client keeps a sm
 5. advertises relayed addresses before direct local addresses in invitations.
 
 No default endpoint is mandatory. LAN discovery and direct invitations continue to work without community infrastructure.
+
+Handlers are registered before transport startup so bootstrap Identify results are not lost. Failed optional relay reservations do not disable working local WebSocket listeners. Reservation attempts have an 8-second completion budget with at most two in flight. Explicit invitations reuse authenticated Identify results rather than opening a competing Identify stream.
+
+Client verification has a strict 64-task total queue budget (including the running task); overflow is dropped before retaining more payloads. Clients and routers cap sync request read buffers at 1 KiB and actively abort sync streams after 10 seconds, even if no further bytes arrive. This bounds waiting, not all denial-of-service risk; very slow legitimate peers may need to retry within existing rate limits.
 
 The included community node has a persistent Peer ID but no user accounts, durable room database or moderation authority. It may retain up to the same bounded signed active-roster/recent-message set in memory and answer direct catch-up streams. Its high-fanout GossipSub mesh and Circuit Relay reservations are bounded and restart-empty. A relay observes network metadata and, because it joins the public GossipSub mesh, public-lobby payloads. Project payloads must be encrypted before publication.
 
@@ -101,7 +109,7 @@ There is no central ban list or report server. Broad public operation requires a
 
 ## Honest limits
 
-- Join work increases Sybil cost but does not prove unique humans.
+- Join work increases Sybil cost but does not prove unique humans. GossipSub IP-colocation scoring (P6) is disabled on both clients and community routers: disconnected peers' IPs are retained by the library for up to an hour, which can silently graylist honest communities sharing one NAT or LAN address. This deliberately removes one concentration penalty; admission proof of work and rate limits are not equivalent replacements and do not eliminate Sybil or eclipse attacks. Other GossipSub scoring components remain unchanged. Independent review of this tradeoff remains required before broad community rollout.
 - Checkpoint v1 is not Byzantine quorum consensus.
 - Clock skew and temporarily different event subsets can still cause short-lived local/remote seat disagreement.
 - Recent history and volunteer-router state are ephemeral and bounded by online peers.

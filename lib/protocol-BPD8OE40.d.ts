@@ -18,6 +18,7 @@ declare function verifyRoomEvent(value: unknown, now?: number, options?: {
   readonly allowHistoricalPresence?: boolean;
 }): Promise<SignedRoomEvent>;
 declare class RoomEventLedger {
+  admissionError(peerId: string, now?: number): 'HALL_COOLDOWN' | 'HALL_FULL' | undefined;
   private readonly seenEventIds;
   private readonly lastSequenceByOrigin;
   private readonly events;
@@ -48,8 +49,8 @@ declare class RoomEventLedger {
 }
 //#endregion
 //#region src/network/protocol.d.ts
-declare const HALL_TOPIC = "/dsh-human-buffer/room/hall/0.5.0";
-declare const HALL_SYNC_PROTOCOL = "/dsh-human-buffer/sync/hall/0.5.0";
+declare const HALL_TOPIC = "/dsh-human-buffer/room/hall/0.5.1";
+declare const HALL_SYNC_PROTOCOL = "/dsh-human-buffer/sync/hall/0.5.1";
 //#endregion
 export { signPresenceEvent as a, verifyRoomEvent as c, RoomEventLedger as i, CarbonPrivateKey as l, HALL_TOPIC as n, signRoomEvent as o, MAX_SYNC_EVENTS as r, signSyncRequest as s, HALL_SYNC_PROTOCOL as t, RememberedPeer as u };
-//# sourceMappingURL=protocol-G0TvyN98.d.ts.map
+//# sourceMappingURL=protocol-BPD8OE40.d.ts.map

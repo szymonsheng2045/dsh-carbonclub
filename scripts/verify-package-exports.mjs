@@ -27,7 +27,16 @@ for (const required of ['./lib/client.js', './lib/typert.host.js', './lib/typert
 }
 
 assert.equal(manifest.private, false, 'public beta package must not be marked private')
-assert.match(manifest.version, /^0\.5\.0-beta\./, 'public beta package version must identify protocol milestone 0.5')
+assert.ok(!manifest.files.some(value => /^(docs\/?|docs\/\*.*)$/.test(value)), 'public docs must use an explicit allowlist, not the entire internal documentation directory')
+assert.ok(!manifest.files.some(value => /HANDOFF|QA-|\.DS_Store/i.test(value)), 'internal handoff and QA files must not be distributed')
+for (const readme of ['README.md', 'README.zh.md']) {
+  const text = await readFile(resolve(root, readme), 'utf8')
+  for (const match of text.matchAll(/\]\(\.\/(docs\/[^)#]+)(?:#[^)]*)?\)/g)) {
+    assert.ok(manifest.files.includes(match[1]), `${readme} links to an unpackaged document: ${match[1]}`)
+    await access(resolve(root, match[1]))
+  }
+}
+assert.match(manifest.version, /^0\.5\.1-beta\./, 'candidate package version must identify protocol milestone 0.5.1')
 for (const required of ['README.md', 'LICENSE', 'SECURITY.md', 'docs/PROTOCOL.md', 'docs/PUBLIC-BETA-CHECKLIST.md', 'docs/OPERATING-A-RELAY.md', 'docs/CAPACITY-500.md', 'docs/INFRASTRUCTURE-BOUNDARIES.md', 'scripts/community-relay.mjs', 'scripts/check-domain-boundaries.mjs', 'Dockerfile.relay', 'docker-compose.relay.yml', 'pnpm-lock.yaml', 'pnpm-lock.deploy.yaml', 'pnpm-workspace.yaml']) await access(resolve(root, required))
 assert.equal(
   await readFile(resolve(root, 'pnpm-lock.deploy.yaml'), 'utf8'),
