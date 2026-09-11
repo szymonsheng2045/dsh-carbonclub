@@ -61,6 +61,12 @@ interface HallCheckpoint {
   readonly epoch: number;
   readonly stewardPeerId: string;
   readonly stateHash: string;
+  /**
+   * Steward's unilateral declaration of who witnessed this checkpoint. Nothing
+   * counter-signs it, and `checkpointIsValid` derives its expectation from this same
+   * field, so a steward may list any ids it likes. Informational only — never treat it
+   * as evidence of agreement, quorum, or independent confirmation.
+   */
   readonly witnesses: readonly string[];
   readonly issuedAt: number;
 }
@@ -130,4 +136,4 @@ type SignedRoomEvent = UnsignedRoomEvent & {
 };
 //#endregion
 export { InviteInfo as a, RoomDelta as c, RoomSnapshot as d, SignedRoomEvent as f, HallPresenceInput as i, RoomMessage as l, EvidenceBundle as n, NetworkStatus as o, HallCheckpoint as r, PostRoomMessageInput as s, ConnectResult as t, RoomProfile as u };
-//# sourceMappingURL=types-Co5N6E2q.d.ts.map
+//# sourceMappingURL=types-BG7HMp2j.d.ts.map

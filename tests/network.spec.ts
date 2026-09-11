@@ -114,7 +114,7 @@ describe('Carbon Club decentralized transport', () => {
   })
 
   it('encodes a bounded, expiring direct-dial invite', async () => {
-    const node = new CarbonClubNode(await generateKeyPair('Ed25519'))
+    const node = new CarbonClubNode(await generateKeyPair('Ed25519'), ISOLATED)
     await node.start()
     try {
       const invite = await node.createInvite(1_000)
@@ -129,8 +129,8 @@ describe('Carbon Club decentralized transport', () => {
   })
 
   it('rejects an address whose authenticated peer id differs from the invite', async () => {
-    const first = new CarbonClubNode(await generateKeyPair('Ed25519'))
-    const second = new CarbonClubNode(await generateKeyPair('Ed25519'))
+    const first = new CarbonClubNode(await generateKeyPair('Ed25519'), ISOLATED)
+    const second = new CarbonClubNode(await generateKeyPair('Ed25519'), ISOLATED)
     await Promise.all([first.start(), second.start()])
     try {
       const firstInvite = await first.createInvite(1_000)
@@ -177,8 +177,8 @@ describe('Carbon Club decentralized transport', () => {
   })
 
   it('connects two independent Host nodes from an invite', async () => {
-    const host = new CarbonClubNode(await generateKeyPair('Ed25519'))
-    const guest = new CarbonClubNode(await generateKeyPair('Ed25519'))
+    const host = new CarbonClubNode(await generateKeyPair('Ed25519'), ISOLATED)
+    const guest = new CarbonClubNode(await generateKeyPair('Ed25519'), ISOLATED)
     await Promise.all([host.start(), guest.start()])
     try {
       const result = await guest.connect((await host.createInvite()).code)
@@ -252,6 +252,30 @@ describe('Carbon Club decentralized transport', () => {
       await Promise.all([host.stop(), lateGuest.stop()])
     }
   }, 12_000)
+
+  it('keeps a lost seat behind the room cooldown and a refresh join fresh', async () => {
+    const ledger = new RoomEventLedger()
+    const guest = await generateKeyPair('Ed25519')
+    const guestId = peerIdFromPublicKey(guest.publicKey).toString()
+    const profile = contentAddressProfile({ name: '旅客' })
+    const joinedAt = Date.now()
+    ledger.accept(await signPresenceEvent(guest, { action: 'join', profile, joinedAt }, 1, joinedAt))
+    expect(ledger.snapshot(joinedAt).seats.some(seat => seat?.participant.peerId === guestId)).toBe(true)
+
+    // A *seat* lost to a presence timeout is deliberately unlike the queued case: every
+    // seat expiry carries the ten-minute cooldown, so no re-join readmits it early. The
+    // node surfaces that as HALL_COOLDOWN when its own lease lapses — bounded, and not
+    // silently unheard forever.
+    const resumedAt = joinedAt + NETWORK_HALL_RULES.presenceTtlMs + 5_000
+    expect(ledger.snapshot(resumedAt).seats.some(seat => seat?.participant.peerId === guestId)).toBe(false)
+    expect(ledger.admissionError(guestId, resumedAt)).toBe('HALL_COOLDOWN')
+
+    // A refresh join must renew joinedAt: assertPayload refuses a join whose joinedAt is
+    // more than ten seconds older than its issuedAt before it is even signed — a rejection
+    // the heartbeat timer swallows, so the refresh would die silently.
+    await expect(signPresenceEvent(guest, { action: 'join', profile, joinedAt }, 2, resumedAt)).rejects.toThrow('not fresh')
+    await expect(signPresenceEvent(guest, { action: 'join', profile, joinedAt: resumedAt }, 3, resumedAt)).resolves.toBeDefined()
+  })
 
   it('keeps a compact, recoverable 500-person roster after repeated heartbeats', () => {
     const ledger = new RoomEventLedger()

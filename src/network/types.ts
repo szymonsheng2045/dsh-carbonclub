@@ -79,6 +79,12 @@ export interface HallCheckpoint {
   readonly epoch: number
   readonly stewardPeerId: string
   readonly stateHash: string
+  /**
+   * Steward's unilateral declaration of who witnessed this checkpoint. Nothing
+   * counter-signs it, and `checkpointIsValid` derives its expectation from this same
+   * field, so a steward may list any ids it likes. Informational only — never treat it
+   * as evidence of agreement, quorum, or independent confirmation.
+   */
   readonly witnesses: readonly string[]
   readonly issuedAt: number
 }

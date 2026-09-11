@@ -1,4 +1,4 @@
-import { c as RoomDelta, d as RoomSnapshot, f as SignedRoomEvent, i as HallPresenceInput, l as RoomMessage, n as EvidenceBundle, r as HallCheckpoint, s as PostRoomMessageInput } from "./types-Co5N6E2q.js";
+import { c as RoomDelta, d as RoomSnapshot, f as SignedRoomEvent, i as HallPresenceInput, l as RoomMessage, n as EvidenceBundle, r as HallCheckpoint, s as PostRoomMessageInput } from "./types-BG7HMp2j.js";
 import { generateKeyPair } from "@libp2p/crypto/keys";
 import "@deepseek-ai/dsh-credentials";
 //#region src/network/identity.d.ts
@@ -53,4 +53,4 @@ declare const HALL_TOPIC = "/dsh-human-buffer/room/hall/0.5.1";
 declare const HALL_SYNC_PROTOCOL = "/dsh-human-buffer/sync/hall/0.5.1";
 //#endregion
 export { signPresenceEvent as a, verifyRoomEvent as c, RoomEventLedger as i, CarbonPrivateKey as l, HALL_TOPIC as n, signRoomEvent as o, MAX_SYNC_EVENTS as r, signSyncRequest as s, HALL_SYNC_PROTOCOL as t, RememberedPeer as u };
-//# sourceMappingURL=protocol-BPD8OE40.d.ts.map
+//# sourceMappingURL=protocol-DGRSBbTC.d.ts.map

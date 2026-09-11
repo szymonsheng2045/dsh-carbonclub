@@ -88,6 +88,8 @@ export class CarbonClubNode {
   private localSequence = 0
   private localPresence: { profile: RoomProfile; joinedAt: number } | undefined
   private lastJoinAt = 0
+  /** Room-sync attempts that failed (rate limit, refusal, timeouts). Debug-visible only. */
+  private historySyncFailures = 0
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined
   private checkpointTimer: ReturnType<typeof setInterval> | undefined
   private readonly ingestion = new BoundedSerialQueue(64)
@@ -324,7 +326,9 @@ export class CarbonClubNode {
         await this.rememberPeer(invite.peerId, invite.addresses)
         return { connected: true, peerId: invite.peerId }
       } catch (error) {
-        if (error instanceof Error && error.message === 'HALL_PROTOCOL_MISMATCH') throw error
+        // Dialing already succeeded, so the remaining addresses name the same peer and
+        // cannot fix a failed protocol check — retrying them only stalls the caller.
+        if (error instanceof Error && (error.message === 'HALL_PROTOCOL_MISMATCH' || error.message === 'PEER_PROTOCOL_CHECK_TIMEOUT')) throw error
         lastError = error
       }
     }
@@ -377,18 +381,22 @@ export class CarbonClubNode {
     const before = this.roomSnapshot(now)
     if (!before.seats.some(seat => seat?.participant.peerId === localPeerId) && before.localQueuePosition === undefined) this.clearLocalPresence()
     const previousPresence = this.localPresence
-    const joinedAt = previousPresence?.joinedAt ?? now
+    const seatJoinedAt = previousPresence?.joinedAt ?? now
     // Heartbeats cannot heal a join basis the room has already expired (see
     // HALL_PRESENCE_REFRESH_MS): refresh with a real join on a TTL/2 cadence instead of
     // waiting for the local lease to lapse into a cooldown.
     const action = presenceActionFor(previousPresence !== undefined, this.lastJoinAt, now)
     const profileChanged = previousPresence === undefined || !profileEquals(previousPresence.profile, profile)
-    this.localPresence = { profile, joinedAt }
+    this.localPresence = { profile, joinedAt: seatJoinedAt }
     if (action === 'join') this.lastJoinAt = now
     const event = await signPresenceEvent(this.privateKey, {
       action,
       ...(action === 'join' || profileChanged ? { profile } : {}),
-      joinedAt,
+      // A join must carry a joinedAt within ten seconds of its issuedAt, so a refresh join
+      // renews it. The room reads joinedAt only when it admits an origin it does not know:
+      // an origin it already holds keeps its original join order, so refreshing cannot
+      // displace anyone — while a genuinely re-admitted peer correctly re-queues.
+      joinedAt: action === 'join' ? now : seatJoinedAt,
     }, this.nextSequence(), now)
     this.ledger.accept(event)
     await this.publishEvent(event)
@@ -501,8 +509,11 @@ export class CarbonClubNode {
       if (typeof decoded !== 'object' || decoded === null || !('version' in decoded) || decoded.version !== 1 || !('topic' in decoded) || decoded.topic !== HALL_TOPIC || !('events' in decoded) || !Array.isArray(decoded.events) || decoded.events.length > MAX_SYNC_EVENTS) throw new Error('Room sync snapshot is invalid')
       for (const candidate of decoded.events) this.ledger.accept(await verifyRoomEvent(candidate, Date.now(), { allowHistoricalPresence: true }))
     } catch (error) {
-      if (process.env.DSH_CARBON_CLUB_DEBUG === '1') console.warn('[carbon-club] room sync failed', targetPeerId, error)
-      // A later reconnect or poll can request history again.
+      this.historySyncFailures += 1
+      if (process.env.DSH_CARBON_CLUB_DEBUG === '1') console.warn(`[carbon-club] room sync failed (${this.historySyncFailures} total)`, targetPeerId, error)
+      // A later reconnect or poll can request history again. Counted rather than surfaced:
+      // adding a field to NetworkStatus would change the strict remote schema and break
+      // mixed-version clients, so the counter stays local and debug-visible.
     }
   }
 

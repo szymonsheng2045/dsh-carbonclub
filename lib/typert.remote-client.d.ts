@@ -1,4 +1,4 @@
-import { a as InviteInfo, c as RoomDelta, d as RoomSnapshot, l as RoomMessage, n as EvidenceBundle, o as NetworkStatus, s as PostRoomMessageInput, t as ConnectResult, u as RoomProfile } from "./types-Co5N6E2q.js";
+import { a as InviteInfo, c as RoomDelta, d as RoomSnapshot, l as RoomMessage, n as EvidenceBundle, o as NetworkStatus, s as PostRoomMessageInput, t as ConnectResult, u as RoomProfile } from "./types-BG7HMp2j.js";
 import { RemoteResult, TypertRemoteContribution } from "@deepseek-ai/dsh-typert-protocol";
 //#region src/typert.remote-client.d.ts
 declare module '@deepseek-ai/dsh-typert-protocol' {

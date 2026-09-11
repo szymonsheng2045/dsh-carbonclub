@@ -1,5 +1,5 @@
-import { a as InviteInfo, c as RoomDelta, d as RoomSnapshot, l as RoomMessage, n as EvidenceBundle, o as NetworkStatus, s as PostRoomMessageInput, t as ConnectResult, u as RoomProfile } from "./types-Co5N6E2q.js";
-import { a as signPresenceEvent, c as verifyRoomEvent, i as RoomEventLedger, l as CarbonPrivateKey, n as HALL_TOPIC, o as signRoomEvent, s as signSyncRequest, t as HALL_SYNC_PROTOCOL, u as RememberedPeer } from "./protocol-BPD8OE40.js";
+import { a as InviteInfo, c as RoomDelta, d as RoomSnapshot, l as RoomMessage, n as EvidenceBundle, o as NetworkStatus, s as PostRoomMessageInput, t as ConnectResult, u as RoomProfile } from "./types-BG7HMp2j.js";
+import { a as signPresenceEvent, c as verifyRoomEvent, i as RoomEventLedger, l as CarbonPrivateKey, n as HALL_TOPIC, o as signRoomEvent, s as signSyncRequest, t as HALL_SYNC_PROTOCOL, u as RememberedPeer } from "./protocol-DGRSBbTC.js";
 import { TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 import { Context } from "@deepseek-ai/cordis";
 //#region src/network/project-crypto.d.ts
@@ -46,6 +46,8 @@ declare class CarbonClubNode {
   private localSequence;
   private localPresence;
   private lastJoinAt;
+  /** Room-sync attempts that failed (rate limit, refusal, timeouts). Debug-visible only. */
+  private historySyncFailures;
   private heartbeatTimer;
   private checkpointTimer;
   private readonly ingestion;
