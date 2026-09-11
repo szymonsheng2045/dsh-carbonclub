@@ -1,4 +1,4 @@
-import { a as InviteInfo, d as RoomSnapshot, l as RoomMessage, o as NetworkStatus, s as PostRoomMessageInput, t as ConnectResult, u as RoomProfile } from "./types-Co5N6E2q.js";
+import { a as InviteInfo, c as RoomDelta, d as RoomSnapshot, l as RoomMessage, n as EvidenceBundle, o as NetworkStatus, s as PostRoomMessageInput, t as ConnectResult, u as RoomProfile } from "./types-Co5N6E2q.js";
 import { RemoteResult, TypertRemoteContribution } from "@deepseek-ai/dsh-typert-protocol";
 //#region src/typert.remote-client.d.ts
 declare module '@deepseek-ai/dsh-typert-protocol' {
@@ -7,6 +7,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     createInvite: () => Promise<RemoteResult<InviteInfo>>;
     connect: (code: string) => Promise<RemoteResult<ConnectResult>>;
     roomSnapshot: () => Promise<RemoteResult<RoomSnapshot>>;
+    roomDelta: (cursor: number) => Promise<RemoteResult<RoomDelta>>;
+    evidence: (eventId: string) => Promise<RemoteResult<EvidenceBundle>>;
     joinHall: (profile: RoomProfile) => Promise<RemoteResult<RoomSnapshot>>;
     leaveHall: () => Promise<RemoteResult<RoomSnapshot>>;
     postRoomMessage: (input: PostRoomMessageInput) => Promise<RemoteResult<RoomMessage>>;
@@ -16,6 +18,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'carbonClub/createInvite': () => Promise<RemoteResult<InviteInfo>>;
     'carbonClub/connect': (code: string) => Promise<RemoteResult<ConnectResult>>;
     'carbonClub/roomSnapshot': () => Promise<RemoteResult<RoomSnapshot>>;
+    'carbonClub/roomDelta': (cursor: number) => Promise<RemoteResult<RoomDelta>>;
+    'carbonClub/evidence': (eventId: string) => Promise<RemoteResult<EvidenceBundle>>;
     'carbonClub/joinHall': (profile: RoomProfile) => Promise<RemoteResult<RoomSnapshot>>;
     'carbonClub/leaveHall': () => Promise<RemoteResult<RoomSnapshot>>;
     'carbonClub/postRoomMessage': (input: PostRoomMessageInput) => Promise<RemoteResult<RoomMessage>>;

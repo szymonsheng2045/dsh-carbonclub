@@ -17,6 +17,10 @@ const listen = (process.env.CARBON_RELAY_LISTEN ?? '/ip4/127.0.0.1/tcp/9090/ws')
 const announce = (process.env.CARBON_RELAY_ANNOUNCE ?? '').split(',').map(value => value.trim()).filter(Boolean)
 const maxReservations = Math.min(1_000, Math.max(1, Number(process.env.CARBON_RELAY_MAX_RESERVATIONS ?? 600)))
 const maxConnections = Math.min(2_000, Math.max(maxReservations + 64, Number(process.env.CARBON_RELAY_MAX_CONNECTIONS ?? 1_200)))
+// Number('60O') is NaN, and Math.min/Math.max propagate it: a typo in either ceiling would
+// reach libp2p as NaN instead of failing the boot. Same posture as CARBON_RELAY_REVIEW_PORT.
+if (!Number.isInteger(maxReservations) || maxReservations < 1 || maxReservations > 1_000) throw new Error('CARBON_RELAY_MAX_RESERVATIONS must be an integer between 1 and 1000')
+if (!Number.isInteger(maxConnections) || maxConnections < maxReservations || maxConnections > 2_000) throw new Error('CARBON_RELAY_MAX_CONNECTIONS must be an integer between CARBON_RELAY_MAX_RESERVATIONS and 2000')
 const maxSyncBytes = 8 * 1024 * 1024
 const reviewPort = Number(process.env.CARBON_RELAY_REVIEW_PORT ?? 0)
 const reviewTokenFile = process.env.CARBON_RELAY_REVIEW_TOKEN_FILE

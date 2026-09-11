@@ -15,7 +15,7 @@ import { assertDialAddress, decodeInvite, encodeInvite, signInvite } from './inv
 import { NETWORK_HALL_RULES } from './hall-rules.js'
 import { HALL_PROTOCOL_VERSION, HALL_SYNC_PROTOCOL, HALL_TOPIC } from './protocol.js'
 import { BoundedSerialQueue, withStreamDeadline } from './resource-budget.js'
-import type { CarbonPrivateKey, RememberedPeer } from './identity.js'
+import { MAX_REMEMBERED_PEERS, type CarbonPrivateKey, type RememberedPeer } from './identity.js'
 import { contentAddressProfile, MAX_SYNC_EVENTS, RoomEventLedger, signCheckpointEvent, signPresenceEvent, signRoomEvent, signSyncRequest, verifyRoomEvent } from './room-events.js'
 import type { ConnectResult, EvidenceBundle, HallPresenceInput, InviteInfo, NetworkStatus, PostRoomMessageInput, RoomDelta, RoomMessage, RoomProfile, RoomSnapshot, SignedRoomEvent } from './types.js'
 
@@ -26,6 +26,26 @@ const MAX_SYNC_BYTES = 8 * 1024 * 1024
 const DISCOVERY_TTL_MS = 30 * 60 * 1_000
 const DIAL_TIMEOUT_MS = 8_000
 const KEEP_ALIVE_TAG = 'keep-alive-carbon-club'
+/**
+ * Presence heartbeats only refresh an admission the room still remembers: once a peer has
+ * been silent for `presenceTtlMs` the room expires its join basis and silently drops every
+ * later heartbeat, while the local ledger still shows the seat as held — "seated, but
+ * nobody receives you" — until the five-minute lease runs out and is replaced by a
+ * cooldown. Re-sending a real join at half the TTL rebuilds that basis within one TTL of
+ * the network returning. A join re-mines the admission proof, is idempotent for an origin
+ * the room already knows, and leaves the seat untouched.
+ */
+const HALL_PRESENCE_REFRESH_MS = Math.floor(NETWORK_HALL_RULES.presenceTtlMs / 2)
+
+/**
+ * Which presence action refreshes this node's seat. A heartbeat is only meaningful while
+ * the room still holds the join basis it refreshes, so a join is re-sent once the last one
+ * is half a TTL old — see HALL_PRESENCE_REFRESH_MS.
+ */
+export function presenceActionFor(hasPresence: boolean, lastJoinAt: number, now: number): HallPresenceInput['action'] {
+  if (!hasPresence) return 'join'
+  return now - lastJoinAt >= HALL_PRESENCE_REFRESH_MS ? 'join' : 'heartbeat'
+}
 const TARGET_DISCOVERY_CONNECTIONS = 12
 const MAX_PARALLEL_DISCOVERY_DIALS = 4
 const MAX_RATE_LIMIT_ORIGINS = 1_024
@@ -67,6 +87,7 @@ export class CarbonClubNode {
   private readonly ledger = new RoomEventLedger()
   private localSequence = 0
   private localPresence: { profile: RoomProfile; joinedAt: number } | undefined
+  private lastJoinAt = 0
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined
   private checkpointTimer: ReturnType<typeof setInterval> | undefined
   private readonly ingestion = new BoundedSerialQueue(64)
@@ -219,6 +240,17 @@ export class CarbonClubNode {
         })
       })
       await node.start()
+      // stop() may have run while the transport was coming up. Continuing here would
+      // report 'online', arm a checkpoint timer that stop() can no longer reach (it
+      // returns early once this.node is undefined) and publish on a stopped node.
+      if (this.node !== node) {
+        try {
+          await node.stop()
+        } catch {
+          // Stop may fail on a transport that never finished coming up.
+        }
+        return
+      }
       if ((this.options.listenAddresses?.length ?? 1) > 0 && node.getMultiaddrs().length === 0) throw new Error('No usable local or relay listener')
       node.services.pubsub.subscribe(HALL_TOPIC)
       this.phase = 'online'
@@ -346,9 +378,13 @@ export class CarbonClubNode {
     if (!before.seats.some(seat => seat?.participant.peerId === localPeerId) && before.localQueuePosition === undefined) this.clearLocalPresence()
     const previousPresence = this.localPresence
     const joinedAt = previousPresence?.joinedAt ?? now
-    const action: HallPresenceInput['action'] = previousPresence === undefined ? 'join' : 'heartbeat'
+    // Heartbeats cannot heal a join basis the room has already expired (see
+    // HALL_PRESENCE_REFRESH_MS): refresh with a real join on a TTL/2 cadence instead of
+    // waiting for the local lease to lapse into a cooldown.
+    const action = presenceActionFor(previousPresence !== undefined, this.lastJoinAt, now)
     const profileChanged = previousPresence === undefined || !profileEquals(previousPresence.profile, profile)
     this.localPresence = { profile, joinedAt }
+    if (action === 'join') this.lastJoinAt = now
     const event = await signPresenceEvent(this.privateKey, {
       action,
       ...(action === 'join' || profileChanged ? { profile } : {}),
@@ -544,7 +580,7 @@ export class CarbonClubNode {
     const allowed = addresses.filter(address => this.isAllowedAddress(address, peerId)).slice(0, 4)
     if (allowed.length === 0) return
     this.remembered.set(peerId, { peerId, addresses: allowed, rememberedAt: Date.now() })
-    while (this.remembered.size > 64) {
+    while (this.remembered.size > MAX_REMEMBERED_PEERS) {
       const oldest = [...this.remembered.values()].sort((left, right) => left.rememberedAt - right.rememberedAt)[0]
       if (oldest === undefined) break
       this.remembered.delete(oldest.peerId)

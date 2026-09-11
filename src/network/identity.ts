@@ -3,6 +3,11 @@ import { credentialRef, type CredentialProvider } from '@deepseek-ai/dsh-credent
 
 export const IDENTITY_CREDENTIAL = credentialRef('DSH_CARBON_CLUB_PRIVATE_KEY')
 export const KNOWN_PEERS_CREDENTIAL = credentialRef('DSH_CARBON_CLUB_KNOWN_PEERS')
+/**
+ * Durable cap on remembered peers. The live node keeps the same bound: a node that
+ * remembered more than the store persists would silently lose the surplus on every save.
+ */
+export const MAX_REMEMBERED_PEERS = 32
 export type CarbonPrivateKey = Awaited<ReturnType<typeof generateKeyPair>>
 
 export interface RememberedPeer {
@@ -38,7 +43,7 @@ export async function loadRememberedPeers(credentials: CredentialProvider): Prom
       if (typeof peer.peerId !== 'string' || !Array.isArray(peer.addresses) || !Number.isSafeInteger(peer.rememberedAt)) return []
       const addresses = peer.addresses.filter((address): address is string => typeof address === 'string').slice(0, 4)
       return addresses.length === 0 ? [] : [{ peerId: peer.peerId, addresses, rememberedAt: peer.rememberedAt! }]
-    }).sort((left, right) => right.rememberedAt - left.rememberedAt).slice(0, 32)
+    }).sort((left, right) => right.rememberedAt - left.rememberedAt).slice(0, MAX_REMEMBERED_PEERS)
   } catch {
     return []
   }
@@ -47,5 +52,5 @@ export async function loadRememberedPeers(credentials: CredentialProvider): Prom
 export async function saveRememberedPeers(credentials: CredentialProvider, peers: readonly RememberedPeer[]): Promise<void> {
   await credentials.set(KNOWN_PEERS_CREDENTIAL, JSON.stringify([...peers]
     .sort((left, right) => right.rememberedAt - left.rememberedAt)
-    .slice(0, 32)))
+    .slice(0, MAX_REMEMBERED_PEERS)))
 }

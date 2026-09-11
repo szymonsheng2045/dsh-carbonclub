@@ -1,15 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { generateKeyPair, privateKeyToProtobuf } from '@libp2p/crypto/keys'
 import { peerIdFromPublicKey } from '@libp2p/peer-id'
-import { CarbonClubNode } from '../src/network/node.js'
+import { CarbonClubNode, presenceActionFor } from '../src/network/node.js'
 import { assertDialAddress, decodeInvite, encodeInvite, signInvite } from '../src/network/invite.js'
 import { HALL_PROTOCOL_VERSION } from '../src/network/protocol.js'
+import { NETWORK_HALL_RULES } from '../src/network/hall-rules.js'
 import { loadOrCreatePrivateKey } from '../src/network/identity.js'
 import { TYPERT } from '../src/typert.host.js'
 import { TYPERT_REMOTE } from '../src/typert.remote-client.js'
 import { contentAddressProfile, RoomEventLedger, signCheckpointEvent, signPresenceEvent, signRoomEvent, verifyRoomEvent } from '../src/network/room-events.js'
 import { createProjectInvite, decodeProjectInvite, decryptProjectPayload, encodeProjectInvite, encryptProjectPayload, rotateProjectInvite } from '../src/network/project-crypto.js'
 import type { SignedRoomEvent } from '../src/network/types.js'
+
+/**
+ * Loopback-only node options. A default node enables mDNS, so it discovers — and is
+ * discovered by — the real LAN/public hall, including whatever club instance the operator
+ * is running. Test traffic then leaks into the live room and into other tests' assertions.
+ */
+const ISOLATED = { enableMdns: false, enableRelayReservations: false, listenAddresses: ['/ip4/127.0.0.1/tcp/0/ws'] } as const
 
 async function waitFor(check: () => boolean, timeoutMs = 5_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
@@ -137,6 +145,18 @@ describe('Carbon Club decentralized transport', () => {
     }
   })
 
+  it('re-joins instead of heartbeating once the room may have dropped the join basis', () => {
+    // The room expires a join basis after presenceTtlMs of silence and then refuses every
+    // heartbeat from that origin — the peer keeps its local seat and speaks into the void
+    // until its own lease lapses into a cooldown. Refreshing with a real join halfway
+    // through the TTL rebuilds the basis before the room can drop it.
+    const ttl = NETWORK_HALL_RULES.presenceTtlMs
+    expect(presenceActionFor(false, 0, 1_000)).toBe('join')
+    expect(presenceActionFor(true, 1_000, 1_000 + ttl / 2 - 1)).toBe('heartbeat')
+    expect(presenceActionFor(true, 1_000, 1_000 + ttl / 2)).toBe('join')
+    expect(presenceActionFor(true, 1_000, 1_000 + ttl)).toBe('join')
+  })
+
   it('binds invitations to the hall protocol and rejects legacy invites before remembering or dialing', async () => {
     const key = await generateKeyPair('Ed25519')
     const peerId = peerIdFromPublicKey(key.publicKey).toString()
@@ -184,8 +204,8 @@ describe('Carbon Club decentralized transport', () => {
   }, 20000)
 
   it('replicates a signed human message between two Host nodes', async () => {
-    const host = new CarbonClubNode(await generateKeyPair('Ed25519'))
-    const guest = new CarbonClubNode(await generateKeyPair('Ed25519'))
+    const host = new CarbonClubNode(await generateKeyPair('Ed25519'), ISOLATED)
+    const guest = new CarbonClubNode(await generateKeyPair('Ed25519'), ISOLATED)
     await Promise.all([host.start(), guest.start()])
     try {
       await guest.connect((await host.createInvite()).code)
@@ -220,8 +240,8 @@ describe('Carbon Club decentralized transport', () => {
   })
 
   it('syncs recent signed history to a peer that joins late', async () => {
-    const host = new CarbonClubNode(await generateKeyPair('Ed25519'))
-    const lateGuest = new CarbonClubNode(await generateKeyPair('Ed25519'))
+    const host = new CarbonClubNode(await generateKeyPair('Ed25519'), ISOLATED)
+    const lateGuest = new CarbonClubNode(await generateKeyPair('Ed25519'), ISOLATED)
     await Promise.all([host.start(), lateGuest.start()])
     try {
       await host.joinHall({ name: '先到的人' })

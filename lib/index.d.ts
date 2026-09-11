@@ -45,6 +45,7 @@ declare class CarbonClubNode {
   private readonly ledger;
   private localSequence;
   private localPresence;
+  private lastJoinAt;
   private heartbeatTimer;
   private checkpointTimer;
   private readonly ingestion;
