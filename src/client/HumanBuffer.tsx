@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -8,7 +8,7 @@ import { setLanguage, useLanguage } from './language-store.js'
 import { roomsFor, SEAT_WARNING_MS, type RoomId } from './room-catalog.js'
 import { draftAfterSend, shouldSubmit } from './composer.js'
 import { defaultName, loadName, MAX_NAME_LENGTH, normalizeName, saveName } from './profile.js'
-import { setPanelOpen, setPanelWidth, togglePanel, usePanelSnapshot } from './panel-store.js'
+import { setHeaderEntryMounted, setPanelOpen, setPanelWidth, togglePanel, useHeaderEntryMounted, usePanelSnapshot } from './panel-store.js'
 import { connectWithInvite, joinNetworkHall, leaveNetworkHall, postNetworkMessage, requestEvidence, requestInvite, useNetworkSnapshot } from './network-store.js'
 import type { HallSeat, RoomMessage, RoomProfile } from '../network/types.js'
 
@@ -170,6 +170,12 @@ export function HumanBufferHeaderAction({ useSessions }: HeaderProps) {
     return current !== undefined && state.byId[current]?.running === true
   })
   const panel = usePanelSnapshot()
+  // Layout effect, not passive: the overlay must know the header entry exists before
+  // the frame paints, or the floating pill flashes in the header's corner on load.
+  useLayoutEffect(() => {
+    setHeaderEntryMounted(true)
+    return () => { setHeaderEntryMounted(false) }
+  }, [])
   return <button
     className="hb-trigger"
     type="button"
@@ -187,7 +193,7 @@ export function HumanBufferOverlay({ useSessions }: OverlayProps) {
   const copy = COPY[language]
   const panel = usePanelSnapshot()
   const network = useNetworkSnapshot()
-  const hasSession = useSessions(state => state.current !== undefined)
+  const headerEntry = useHeaderEntryMounted()
   const running = useSessions(state => {
     const current = state.current
     return current !== undefined && state.byId[current]?.running === true
@@ -324,7 +330,7 @@ export function HumanBufferOverlay({ useSessions }: OverlayProps) {
   }
 
   return <div className="hb-layer" data-open={panel.open || undefined}>
-    {!hasSession && !panel.open && <button className="hb-floating" type="button" onClick={togglePanel}>
+    {!headerEntry && !panel.open && <button className="hb-floating" type="button" onClick={togglePanel}>
       <span className="hb-trigger-dot" />{copy.clubName}
     </button>}
     <div className="hb-scrim" onClick={() => { setPanelOpen(false) }} />

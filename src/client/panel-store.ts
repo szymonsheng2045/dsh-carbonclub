@@ -40,3 +40,31 @@ export function usePanelSnapshot(): PanelSnapshot {
     () => snapshot,
   )
 }
+
+/**
+ * Whether the session-header entry is on screen. The header only exists while a
+ * conversation is rendered, and `useSessions().current` is already defined on the
+ * new-session landing screen (DSH 0.1.5), so the overlay cannot infer the entry
+ * point from session state — it fell back to nothing at all there. The overlay now
+ * renders the floating pill whenever the header action is not mounted; the two live
+ * in the same corner of the frame, so exactly one of them is ever on screen.
+ */
+let headerEntryMounted = false
+const entryListeners = new Set<() => void>()
+
+export function setHeaderEntryMounted(mounted: boolean): void {
+  if (mounted === headerEntryMounted) return
+  headerEntryMounted = mounted
+  for (const listener of entryListeners) listener()
+}
+
+export function useHeaderEntryMounted(): boolean {
+  return useSyncExternalStore(
+    listener => {
+      entryListeners.add(listener)
+      return () => { entryListeners.delete(listener) }
+    },
+    () => headerEntryMounted,
+    () => headerEntryMounted,
+  )
+}
