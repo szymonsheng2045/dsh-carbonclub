@@ -1,4 +1,4 @@
-import { a as InviteInfo, c as RoomDelta, d as RoomSnapshot, l as RoomMessage, n as EvidenceBundle, o as NetworkStatus, s as PostRoomMessageInput, t as ConnectResult, u as RoomProfile } from "./types-BG7HMp2j.js";
+import { a as InviteInfo, c as RoomDelta, d as RoomSnapshot, f as SignedRoomEvent, l as RoomMessage, n as EvidenceBundle, o as NetworkStatus, s as PostRoomMessageInput, t as ConnectResult, u as RoomProfile } from "./types-BG7HMp2j.js";
 import { a as signPresenceEvent, c as verifyRoomEvent, i as RoomEventLedger, l as CarbonPrivateKey, n as HALL_TOPIC, o as signRoomEvent, s as signSyncRequest, t as HALL_SYNC_PROTOCOL, u as RememberedPeer } from "./protocol-DGRSBbTC.js";
 import { TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 import { Context } from "@deepseek-ai/cordis";
@@ -33,6 +33,13 @@ interface CarbonClubNodeOptions {
   readonly bootstrapAddresses?: readonly string[];
   readonly enableMdns?: boolean;
   readonly enableRelayReservations?: boolean;
+  /**
+   * Diagnostic and test seam: return false to drop one outbound room event instead of
+   * gossiping it. A node keeps accepting its own events into its local ledger, so this is
+   * how a one-way partition is reproduced — the peer stays convinced it is present while
+   * the room stops hearing it.
+   */
+  readonly outboundEventGate?: (event: SignedRoomEvent) => boolean;
 }
 declare class CarbonClubNode {
   private readonly privateKey;

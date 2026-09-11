@@ -277,6 +277,56 @@ describe('Carbon Club decentralized transport', () => {
     await expect(signPresenceEvent(guest, { action: 'join', profile, joinedAt: resumedAt }, 3, resumedAt)).resolves.toBeDefined()
   })
 
+  it('carries a watcher back into the hall across a one-way partition', async () => {
+    // Eight seated peers that stay present, plus a watcher whose outbound events are dropped
+    // for longer than the presence TTL. The watcher keeps accepting its own events, so it
+    // goes on believing it is in line while the room has already forgotten it — the split
+    // brain the refresh join exists to end. Presence timestamps are supplied throughout, so
+    // the partition is simulated without waiting two real minutes.
+    let partitioned = false
+    const host = new CarbonClubNode(await generateKeyPair('Ed25519'), ISOLATED)
+    const guest = new CarbonClubNode(await generateKeyPair('Ed25519'), { ...ISOLATED, outboundEventGate: () => !partitioned })
+    const fillers: CarbonClubNode[] = []
+    await Promise.all([host.start(), guest.start()])
+    try {
+      const invite = (await host.createInvite()).code
+      await guest.connect(invite)
+      const base = Date.now()
+      for (let index = 0; index < 8; index += 1) {
+        const filler = new CarbonClubNode(await generateKeyPair('Ed25519'), ISOLATED)
+        await filler.start()
+        await filler.connect(invite)
+        await filler.joinHall({ name: `seat-${index}` }, base + index)
+        fillers.push(filler)
+      }
+      await guest.joinHall({ name: 'watcher' }, base + 20)
+      const guestId = guest.status().peerId
+      const queuedOnHost = (now: number): boolean => host.roomSnapshot(now).queue.some(participant => participant.peerId === guestId)
+      await waitFor(() => queuedOnHost(base + 30), 15_000)
+
+      partitioned = true
+      for (const offset of [45_000, 90_000, 135_000]) await guest.joinHall({ name: 'watcher' }, base + offset)
+      // The seats must outlive the probe: a seat expires on presence TTL *or* on the idle
+      // rule, whichever comes first, so refresh both.
+      for (const [index, filler] of fillers.entries()) {
+        await filler.joinHall({ name: `seat-${index}` }, base + 100_000)
+        await filler.publishHallMessage({ body: `still here ${index}` }, base + 100_000)
+      }
+
+      const localHall = guest.roomSnapshot(base + 150_000)
+      expect(localHall.seats.some(seat => seat?.participant.peerId === guestId) || localHall.queue.some(participant => participant.peerId === guestId)).toBe(true)
+      expect(queuedOnHost(base + 150_000)).toBe(false)
+
+      // The partition ends. The TTL/2 cadence (presenceActionFor) sends a real join, which
+      // the room accepts without a join basis and which puts the watcher back in line.
+      partitioned = false
+      await guest.joinHall({ name: 'watcher' }, base + 150_000)
+      await waitFor(() => queuedOnHost(base + 150_000), 15_000)
+    } finally {
+      await Promise.all([host, guest, ...fillers].map(node => node.stop()))
+    }
+  }, 60_000)
+
   it('keeps a compact, recoverable 500-person roster after repeated heartbeats', () => {
     const ledger = new RoomEventLedger()
     const base = Date.now() - 5_000

@@ -133,7 +133,7 @@ export async function requestEvidence(eventId: string): Promise<EvidenceBundle |
 export async function postNetworkMessage(input: PostRoomMessageInput): Promise<boolean> {
   const api = remote
   if (api === undefined) {
-    emit({ ...snapshot, actionError: 'Carbon Club Host connection is unavailable' })
+    emit({ ...snapshot, actionError: 'HOST_UNAVAILABLE' })
     return false
   }
   if (snapshot.posting) return false
@@ -177,7 +177,7 @@ export async function postNetworkMessage(input: PostRoomMessageInput): Promise<b
 function changeHall(action: (api: CarbonClubRemote) => Promise<RemoteResult<RoomSnapshot>>): Promise<boolean> {
   const api = remote
   if (api === undefined) {
-    emit({ ...snapshot, actionError: 'Carbon Club Host connection is unavailable' })
+    emit({ ...snapshot, actionError: 'HOST_UNAVAILABLE' })
     return Promise.resolve(false)
   }
   const current = binding
@@ -217,7 +217,7 @@ export function leaveNetworkHall(): Promise<boolean> {
 export async function requestInvite(): Promise<void> {
   const api = remote
   if (api === undefined) {
-    emit({ ...snapshot, actionError: 'Carbon Club Host connection is unavailable' })
+    emit({ ...snapshot, actionError: 'HOST_UNAVAILABLE' })
     return
   }
   if (snapshot.busy !== undefined) return
@@ -236,7 +236,7 @@ export async function requestInvite(): Promise<void> {
 export async function connectWithInvite(code: string): Promise<boolean> {
   const api = remote
   if (api === undefined) {
-    emit({ ...snapshot, actionError: 'Carbon Club Host connection is unavailable' })
+    emit({ ...snapshot, actionError: 'HOST_UNAVAILABLE' })
     return false
   }
   if (snapshot.busy !== undefined) return false

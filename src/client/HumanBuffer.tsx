@@ -109,7 +109,9 @@ function peerColor(peerId: string): string {
 function networkErrorLabel(error: string | undefined, language: Language): string | undefined {
   if (error === undefined) return undefined
   const messages = COPY[language].networkErrors as Readonly<Record<string, string>>
-  return messages[error] ?? error
+  // Unmapped host errors are codes, not prose: rendering them raw puts English or internal
+  // strings in the Chinese UI. The raw text stays available as the element's title.
+  return messages[error] ?? COPY[language].networkErrorUnknown
 }
 
 function MeshMessages({ messages, profiles, avatars, blockedPeers, language, onBlock, onEvidence }: { readonly messages: readonly RoomMessage[]; readonly profiles: Readonly<Record<string, RoomProfile>>; readonly avatars: Readonly<Record<string, string>>; readonly blockedPeers: ReadonlySet<string>; readonly language: Language; readonly onBlock: (peerId: string) => void; readonly onEvidence: (eventId: string) => void }) {
@@ -155,7 +157,7 @@ function NetworkCard({ language }: { readonly language: Language }) {
     </div>
     {network.invite !== undefined && <div className="hb-invite-output"><input readOnly value={network.invite.code} aria-label={copy.inviteCode} /><button type="button" onClick={() => { void copyInvite() }}>{copied ? copy.copied : copy.copy}</button></div>}
     <div className="hb-join"><input value={joinCode} placeholder={copy.pasteInvite} aria-label={copy.pasteInvite} onChange={event => { setJoinCode(event.target.value) }} /><button type="button" disabled={joinCode.trim() === '' || network.busy !== undefined} onClick={() => { void connectWithInvite(joinCode).then(connected => { if (connected) setJoinCode('') }) }}>{network.busy === 'connect' ? copy.connecting : copy.connectPeer}</button></div>
-    {displayedError !== undefined && <div className="hb-network-error" role="alert">{displayedError}</div>}
+    {displayedError !== undefined && <div className="hb-network-error" role="alert" title={network.actionError ?? network.error}>{displayedError}</div>}
     {copyFailed && <div className="hb-network-error" role="alert">{copy.copyFailed}</div>}
     <div className="hb-network-note">{copy.networkNote(network.discoveredPeers, network.bootstrapConfigured, network.relayAddresses)}</div>
     <div className="hb-network-note">{copy.protocolHint}</div>
@@ -232,16 +234,28 @@ export function HumanBufferOverlay({ useSessions }: OverlayProps) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [panel.open, roomId])
 
+  const lastVisibleMessageId = useMemo(
+    // Blocking hides messages in the render only, so a blocked peer's message would still
+    // raise the "new messages" pill with nothing new to scroll to.
+    () => network.room?.messages.filter(message => !blockedPeers.has(message.origin)).at(-1)?.id,
+    [network.room?.messages, blockedPeers],
+  )
+
   useEffect(() => {
     if (!panel.open || roomId !== 'hall') return
-    if (network.room?.messages.at(-1) === undefined) { setUnreadMessages(false); return }
+    if (lastVisibleMessageId === undefined) { setUnreadMessages(false); return }
     if (followMessages.current) scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
     else setUnreadMessages(true)
-  }, [network.room?.messages.at(-1)?.id, panel.open, roomId])
+  }, [lastVisibleMessageId, panel.open, roomId])
 
   useEffect(() => {
     if (!panel.open) return
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setPanelOpen(false) }
+    const escape = (event: KeyboardEvent) => {
+      // Escape also cancels an in-flight IME candidate. Closing the club on that keystroke
+      // would discard what the user was composing — shouldSubmit guards Enter the same way.
+      if (event.isComposing) return
+      if (event.key === 'Escape') setPanelOpen(false)
+    }
     window.addEventListener('keydown', escape)
     return () => { window.removeEventListener('keydown', escape) }
   }, [panel.open])

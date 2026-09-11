@@ -60,6 +60,13 @@ export interface CarbonClubNodeOptions {
   readonly bootstrapAddresses?: readonly string[]
   readonly enableMdns?: boolean
   readonly enableRelayReservations?: boolean
+  /**
+   * Diagnostic and test seam: return false to drop one outbound room event instead of
+   * gossiping it. A node keeps accepting its own events into its local ledger, so this is
+   * how a one-way partition is reproduced — the peer stays convinced it is present while
+   * the room stops hearing it.
+   */
+  readonly outboundEventGate?: (event: SignedRoomEvent) => boolean
 }
 
 function errorMessage(error: unknown): string {
@@ -529,6 +536,7 @@ export class CarbonClubNode {
   }
 
   private async publishEvent(event: SignedRoomEvent): Promise<void> {
+    if (this.options.outboundEventGate?.(event) === false) return
     const node = this.requiredNode()
     const data = encoder.encode(JSON.stringify(event))
     if (data.byteLength > MAX_EVENT_BYTES) throw new Error('Room event exceeds the network byte budget')

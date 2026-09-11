@@ -29,7 +29,9 @@ export function setLanguage(next: Language): void {
 }
 
 export function useLanguage(): Language {
-  const [value, setValue] = useState<Language>(language)
+  // Hydrate during the first render rather than in an effect: an effect runs after the
+  // first paint, so a stored 'en' preference would flash Chinese on every cold load.
+  const [value, setValue] = useState<Language>(() => { hydrate(); return language })
   useEffect(() => {
     hydrate()
     setValue(language)
