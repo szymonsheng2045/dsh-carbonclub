@@ -1,4 +1,6 @@
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-cordis-client-runner/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-api-gateway/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -6,6 +8,18 @@ import { TYPERT_REMOTE } from '../typert.remote-client.js'
 import { HumanBufferHeaderAction, HumanBufferOverlay } from './HumanBuffer.js'
 import { bindNetworkRemote, refreshNetwork, type CarbonClubRemote } from './network-store.js'
 import { STYLE_ID, styles } from './styles.js'
+
+/**
+ * The client slot registry face this plugin calls. DSH 0.1.5 types it on the root context
+ * through the cordis client runner, whose declaration is not reachable from this package's
+ * dependency set, so the club declares the two members it uses. Type-only: the framework
+ * passes the real registry at runtime.
+ */
+interface ClientSlots {
+  inject(name: string, factory: () => unknown): unknown
+  register(entry: { readonly name: string; readonly id: string; readonly order?: number }, component: unknown): () => unknown
+}
+type ClientContext = Context & { readonly slots: ClientSlots }
 
 export const inject = ['slots', 'remote']
 

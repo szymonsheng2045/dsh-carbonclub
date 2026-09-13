@@ -36,7 +36,14 @@ for (const readme of ['README.md', 'README.zh.md']) {
     await access(resolve(root, match[1]))
   }
 }
-assert.match(manifest.version, /^0\.5\.1-beta\./, 'candidate package version must identify protocol milestone 0.5.1')
+// The release number and the hall protocol move independently: a release that changes
+// nothing on the wire must not strand the previous lobby. The manifest declares the
+// protocol it speaks and this gate holds that declaration to the shipped constant, so a
+// declaration that drifts from the code still fails the build.
+const protocolSource = await readFile(resolve(root, 'src/network/protocol.ts'), 'utf8')
+const protocolVersion = protocolSource.match(/HALL_PROTOCOL_VERSION = '([^']+)'/)?.[1]
+assert.ok(protocolVersion, 'cannot read HALL_PROTOCOL_VERSION from src/network/protocol.ts')
+assert.equal(manifest.hallProtocol, protocolVersion, 'declared hallProtocol must match HALL_PROTOCOL_VERSION')
 for (const required of ['README.md', 'LICENSE', 'SECURITY.md', 'docs/PROTOCOL.md', 'docs/PUBLIC-BETA-CHECKLIST.md', 'docs/OPERATING-A-RELAY.md', 'docs/CAPACITY-500.md', 'docs/INFRASTRUCTURE-BOUNDARIES.md', 'scripts/community-relay.mjs', 'scripts/check-domain-boundaries.mjs', 'Dockerfile.relay', 'docker-compose.relay.yml', 'pnpm-lock.yaml', 'pnpm-lock.deploy.yaml', 'pnpm-workspace.yaml']) await access(resolve(root, required))
 assert.equal(
   await readFile(resolve(root, 'pnpm-lock.deploy.yaml'), 'utf8'),

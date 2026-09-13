@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.8 — 2026-09-13
+
+- Targets the current DSH developer preview (`0.1.5-rc.1`). `@deepseek-ai/dsh-client-runtime` was retired after 0.1.1-rc.2; the client half now takes its context from `@deepseek-ai/cordis`, declares `@deepseek-ai/dsh-cordis-client-runner` (slot registry) and `@deepseek-ai/dsh-client-ui-session` (sessions feed) as the packages that own those declarations, and drops the retired dependency from both peers and `dsh.client.inject`.
+- Presence: a heartbeat can no longer refresh a join basis the room has already expired, so a peer that lost one-way contact kept its local seat while every later event was dropped ("talking into the void"). `joinHall` now re-sends a real join once the last one is half a presence TTL old, renewing `joinedAt` (a join whose `joinedAt` is more than ten seconds older than its `issuedAt` is rejected before signing). A lost *seat* still carries the room cooldown by design; the refresh bounds the silent window instead of defeating it. Protocol version is unchanged, so 0.6.8 and 0.5.1-beta.1 clients share a lobby.
+- `start()` now re-checks that the node it started is still the current one: a `stop()` during transport startup used to leave `phase: online` with a checkpoint timer that could never be cleared.
+- The remote contract declares all nine methods again (`roomDelta` and `evidence` were missing from the type map while the runtime published them).
+- `CARBON_RELAY_MAX_RESERVATIONS` / `CARBON_RELAY_MAX_CONNECTIONS` fail fast on non-integers instead of letting `NaN` reach libp2p.
+- Remembered peers use one bound: the live cap was 64 while load and save kept 32, so half of what a node remembered was silently dropped on every save.
+- `connect()` no longer walks the remaining addresses of a peer whose protocol check timed out; they name the same peer. Room-sync failures are counted and debug-visible.
+- Client: the new-session screen has an entry point again (its `hasSession` guard never held on 0.1.5), Escape during IME composition no longer closes the drawer, unmapped host errors are localized instead of rendering raw English/internal text, blocking a peer no longer raises an empty "new messages" pill, and a stored `en` preference no longer flashes Chinese on cold load.
+- Tests: nodes are loopback-isolated (the suite used to join the operator's live LAN/public hall and could break its own order-sensitive assertions), the client-plugin mock answers every method the bind path calls, and a new end-to-end case reproduces the one-way partition and the re-join through the real transport.
+- The manifest declares the protocol it speaks (`hallProtocol`), and the packaging gate holds that declaration to `HALL_PROTOCOL_VERSION`; the release number no longer has to encode the protocol milestone, so a release that changes nothing on the wire does not strand the previous lobby. `pnpm-lock.deploy.yaml` and the relay image's default release label were resynced to this release.
+- `HallCheckpoint.witnesses` is documented as a steward's unilateral declaration, not evidence. Server-side strictness is deliberately unchanged.
+
 ## 0.5.1-beta.1 — 2026-09-10
 
 - Bound pending client verification to 64 tasks and actively expire silent client/router sync streams after 10 seconds. Added burst, deadline, and real-relay regressions following a DeepSeek model review (not an independent security audit).

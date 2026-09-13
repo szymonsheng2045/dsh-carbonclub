@@ -8,9 +8,9 @@
 
 ## 当前版本
 
-**v0.5.1-beta.1** 已发布。相比 0.5.0：修正同时过期候位者的席位推导；使用独立的 0.5.1 topic/sync 通道；社区中继新增只读审查诊断与更严的资源硬上限。0.5.1 客户端不能与 0.5.0 客户端、旧路由缓存组成同一个大厅；双入口并存与分级回退见[升级与回退指引](./docs/UPGRADING-0.5.1.zh.md)，候选验收记录见[候选验收与迁移](./docs/CANDIDATE-0.5.1.zh.md)。
+**v0.6.8** 已发布。相比 0.5.1-beta.1：面向当前 DSH 开发者预览版，并修复了一轮独立审查确认的缺陷——单向分区后无法自愈的 presence、`start()/stop()` 竞态导致的 checkpoint 定时器泄漏、缺失的两个远程契约方法、未校验的中继资源上限、remembered peers 容量不一致、新会话页没有入口、输入法 Esc 误关抽屉、未翻译的宿主错误、语言首屏闪动。大厅协议仍为 0.5.1，因此 0.6.8 与 0.5.1-beta.1 客户端可同处一个大厅；0.5.0 并存与回退路径见[升级与回退指引](./docs/UPGRADING-0.5.1.zh.md)。
 
-`0.5.1-beta.1` 面向当前 DSH 开发者预览版（`0.1.1-rc.2`），提供一个签名公共大厅：最多 500 个活跃身份，八个发言席。
+`0.6.8` 面向当前 DSH 开发者预览版（`0.1.5-rc.1`），提供一个签名公共大厅：最多 500 个活跃身份，八个发言席。
 
 - 嵌入 DSH Web 界面的响应式、可调宽侧栏。
 - 八席确定性排队；单次坐席五分钟，并有空闲让位、冷却、慢速和防连麦霸屏规则。
@@ -28,8 +28,8 @@
 将预构建 Release 包安装进 DSH profile，无需授权安装期构建脚本：
 
 ```sh
-curl -LO https://github.com/szymonsheng2045/dsh-carbonclub/releases/download/v0.5.1-beta.1/dsh-human-buffer-0.5.1-beta.1.tgz
-dsh plugin --profile carbon-club add ./dsh-human-buffer-0.5.1-beta.1.tgz
+curl -LO https://github.com/szymonsheng2045/dsh-carbonclub/releases/download/v0.6.8/dsh-human-buffer-0.6.8.tgz
+dsh plugin --profile carbon-club add ./dsh-human-buffer-0.6.8.tgz
 # dsh rc 给自定义 profile 只装 @deepseek-ai/dsh-base，没有应用层，直接启动会空转无输出；
 # 在 profile 的 package.json 里补入 Web 应用层（幂等一行命令）：
 node -e "const fs=require('fs'),os=require('os'),p=(process.env.DSH_HOME??os.homedir()+'/.dsh')+'/profiles/carbon-club/package.json',m=JSON.parse(fs.readFileSync(p,'utf8')),b=m.dsh.profile.bundles;if(!b.includes('@deepseek-ai/dsh-web-app'))b.splice(1,0,'@deepseek-ai/dsh-web-app');fs.writeFileSync(p,JSON.stringify(m,null,2)+'\n')"
@@ -58,6 +58,13 @@ dsh --profile carbon-club-dev
 
 ```sh
 DSH_CARBON_CLUB_BOOTSTRAP='/dns4/relay-051.laozi.art/tcp/443/wss/p2p/12D3KooWABxQrMHAVgbeqiVctkAPBFPSPSqCJi1SC4YRZh1hsMrh' dsh --profile carbon-club
+```
+
+> 这个变量只能来自启动环境。`dsh` 把它归为 bootstrap-only：**任何 `.env` 层（含
+> `$DSH_HOME/.env`）设置它都会让 dsh 直接拒绝启动**。请在 shell 里 export（写进
+> `~/.zshrc` 即可），这也是会所无需包装脚本就能连上公共大厅的方式。
+
+```sh
 ```
 
 0.5.0 旧入口 `relay.laozi.art` 在过渡窗口内继续为旧版客户端服务（不少于两周）；0.5.0 客户端回退指引见[升级与回退指引](./docs/UPGRADING-0.5.1.zh.md)。

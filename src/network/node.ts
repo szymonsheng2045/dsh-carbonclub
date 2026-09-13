@@ -22,6 +22,12 @@ import type { ConnectResult, EvidenceBundle, HallPresenceInput, InviteInfo, Netw
 export { HALL_SYNC_PROTOCOL, HALL_TOPIC } from './protocol.js'
 const INVITE_TTL_MS = 30 * 60 * 1_000
 const MAX_EVENT_BYTES = 48_000
+// GossipSub sends a published event only to the peers it already knows subscribe to the
+// topic, and this node allows publishing to zero topic peers. These bound how long a first
+// publish on a fresh connection waits for that knowledge instead of vanishing — see
+// awaitTopicSubscriber.
+const TOPIC_SUBSCRIBER_WAIT_MS = 1_000
+const TOPIC_SUBSCRIBER_POLL_MS = 25
 const MAX_SYNC_BYTES = 8 * 1024 * 1024
 const DISCOVERY_TTL_MS = 30 * 60 * 1_000
 const DIAL_TIMEOUT_MS = 8_000
@@ -97,6 +103,8 @@ export class CarbonClubNode {
   private lastJoinAt = 0
   /** Room-sync attempts that failed (rate limit, refusal, timeouts). Debug-visible only. */
   private historySyncFailures = 0
+  /** Publishes that reached no peer at all. Debug-visible only; see publishEvent. */
+  private silentPublishDrops = 0
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined
   private checkpointTimer: ReturnType<typeof setInterval> | undefined
   private readonly ingestion = new BoundedSerialQueue(64)
@@ -541,13 +549,44 @@ export class CarbonClubNode {
     const data = encoder.encode(JSON.stringify(event))
     if (data.byteLength > MAX_EVENT_BYTES) throw new Error('Room event exceeds the network byte budget')
     const pubsub = node.services.pubsub as { publish(topic: string, data: Uint8Array): Promise<unknown>, mesh?: Map<string, Set<string>>, topics?: Map<string, Set<string>> }
+    await this.awaitTopicSubscriber(pubsub)
     if (process.env.DSH_CARBON_CLUB_DEBUG === '1') {
       console.warn(`[carbon-club] publish ${event.kind} mesh=${pubsub.mesh?.get(HALL_TOPIC)?.size ?? -1} topicPeers=${pubsub.topics?.get(HALL_TOPIC)?.size ?? -1} bytes=${data.byteLength}`)
     }
     const result = await pubsub.publish(HALL_TOPIC, data)
+    const recipients = (result as { recipients?: unknown[] } | undefined)?.recipients?.length ?? -1
+    if (recipients === 0) {
+      // Nobody received this event and GossipSub has already cached it as seen, so repeating
+      // the publish cannot deliver it. A node that is alone in a room is a legitimate
+      // zero-recipient case, so count it and keep the room usable instead of throwing.
+      this.silentPublishDrops += 1
+      if (process.env.DSH_CARBON_CLUB_DEBUG === '1') {
+        console.warn(`[carbon-club] publish reached no peer (${this.silentPublishDrops} total) kind=${event.kind} seq=${event.sequence}`)
+      }
+    }
     if (process.env.DSH_CARBON_CLUB_DEBUG === '1') {
-      const recipients = (result as { recipients?: unknown[] } | undefined)?.recipients?.length ?? -1
       console.warn(`[carbon-club] published ${event.kind} seq=${event.sequence} recipients=${recipients}`)
+    }
+  }
+
+  /**
+   * A connection that has just been established has not exchanged GossipSub subscriptions
+   * yet, and because this node allows publishing to zero topic peers, `publish` then
+   * resolves successfully while nobody receives the event — and the event is in the seen
+   * cache, so no retry can deliver it either. That window is exactly when a user sends the
+   * first message after connecting, so wait briefly for a known subscriber. A node with no
+   * connections is legitimately alone and publishes immediately.
+   */
+  private async awaitTopicSubscriber(pubsub: { topics?: Map<string, Set<string>> }): Promise<void> {
+    const known = (): number => pubsub.topics?.get(HALL_TOPIC)?.size ?? 0
+    if (known() > 0) return
+    const node = this.node
+    if (node === undefined || node.getConnections().length === 0) return
+    const deadline = Date.now() + TOPIC_SUBSCRIBER_WAIT_MS
+    while (Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, TOPIC_SUBSCRIBER_POLL_MS))
+      if (known() > 0) return
+      if (this.node !== node || node.getConnections().length === 0) return
     }
   }
 

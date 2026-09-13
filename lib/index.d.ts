@@ -55,6 +55,8 @@ declare class CarbonClubNode {
   private lastJoinAt;
   /** Room-sync attempts that failed (rate limit, refusal, timeouts). Debug-visible only. */
   private historySyncFailures;
+  /** Publishes that reached no peer at all. Debug-visible only; see publishEvent. */
+  private silentPublishDrops;
   private heartbeatTimer;
   private checkpointTimer;
   private readonly ingestion;
@@ -84,6 +86,15 @@ declare class CarbonClubNode {
   private requestHistory;
   private publishCheckpoint;
   private publishEvent;
+  /**
+   * A connection that has just been established has not exchanged GossipSub subscriptions
+   * yet, and because this node allows publishing to zero topic peers, `publish` then
+   * resolves successfully while nobody receives the event — and the event is in the seen
+   * cache, so no retry can deliver it either. That window is exactly when a user sends the
+   * first message after connecting, so wait briefly for a known subscriber. A node with no
+   * connections is legitimately alone and publishes immediately.
+   */
+  private awaitTopicSubscriber;
   private requiredNode;
   private inviteAddresses;
   private isAllowedAddress;

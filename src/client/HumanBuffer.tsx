@@ -12,6 +12,17 @@ import { setHeaderEntryMounted, setPanelOpen, setPanelWidth, togglePanel, useHea
 import { connectWithInvite, joinNetworkHall, leaveNetworkHall, postNetworkMessage, requestEvidence, requestInvite, useNetworkSnapshot } from './network-store.js'
 import type { HallSeat, RoomMessage, RoomProfile } from '../network/types.js'
 
+/**
+ * The slice of the session list feed this overlay reads. 0.1.5 exposes the feed through the
+ * `useSessions` prop (augmented by @deepseek-ai/dsh-client-ui-session) but does not export
+ * its state type from the client entry, so the club declares the fields it uses.
+ */
+interface SessionFeed {
+  readonly ids: readonly string[]
+  readonly byId: Readonly<Record<string, { readonly completed?: boolean; readonly updatedAt: number; readonly displayTitle: string; readonly running?: boolean } | undefined>>
+  readonly current?: string | undefined
+}
+
 type HeaderProps = PropsRuntime<'conversation.session.header.utilities'>
 type OverlayProps = PropsRuntime<'shell.overlay'>
 
@@ -167,7 +178,7 @@ function NetworkCard({ language }: { readonly language: Language }) {
 export function HumanBufferHeaderAction({ useSessions }: HeaderProps) {
   const language = useLanguage()
   const copy = COPY[language]
-  const running = useSessions(state => {
+  const running = useSessions((state: SessionFeed) => {
     const current = state.current
     return current !== undefined && state.byId[current]?.running === true
   })
@@ -196,7 +207,7 @@ export function HumanBufferOverlay({ useSessions }: OverlayProps) {
   const panel = usePanelSnapshot()
   const network = useNetworkSnapshot()
   const headerEntry = useHeaderEntryMounted()
-  const running = useSessions(state => {
+  const running = useSessions((state: SessionFeed) => {
     const current = state.current
     return current !== undefined && state.byId[current]?.running === true
   })
@@ -217,7 +228,7 @@ export function HumanBufferOverlay({ useSessions }: OverlayProps) {
   useEffect(() => () => { resizeCleanup.current?.() }, [])
   const rooms = useMemo(() => roomsFor(language), [language])
   const room = rooms.find(candidate => candidate.id === roomId) ?? rooms[0]!
-  const localLastCompletedSession = useSessions(state => {
+  const localLastCompletedSession = useSessions((state: SessionFeed) => {
     let latest: { readonly title: string; readonly updatedAt: number } | undefined
     for (const id of state.ids) {
       const session = state.byId[id]

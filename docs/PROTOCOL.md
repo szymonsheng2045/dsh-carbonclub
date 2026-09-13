@@ -1,6 +1,10 @@
-# Carbon Club protocol 0.5.1 (unpublished candidate)
+# Carbon Club protocol 0.5.1
 
-0.5.1 changes deterministic simultaneous-expiry handling: expired queued peers are removed before filling vacated seats and do not acquire a speaking-seat cooldown. It is not state-compatible with 0.5.0. Clients and state-caching routers must move together to separate topic/sync channels; no transparent bridge or historical import is enabled. Production remains unchanged until an approved migration.
+Shipped in the public betas since `0.5.1-beta.1`; production rooms stay on the previous protocol until an approved migration.
+
+0.5.1 changes deterministic simultaneous-expiry handling: expired queued peers are removed before filling vacated seats and do not acquire a speaking-seat cooldown. It is not state-compatible with 0.5.0. Clients and state-caching routers must move together to separate topic/sync channels; no transparent bridge or historical import is enabled.
+
+The package release number and this protocol number move independently. A release that changes nothing on the wire keeps the same hall version, so its clients keep sharing a lobby with the previous release; `package.json` declares the protocol it speaks in `hallProtocol`, the packaging gate holds that declaration to `HALL_PROTOCOL_VERSION` in `src/network/protocol.ts`, and no client infers the protocol from the release string. A release that does change the wire format must raise `HALL_PROTOCOL_VERSION` and the declaration together.
 
 ## Product boundary
 

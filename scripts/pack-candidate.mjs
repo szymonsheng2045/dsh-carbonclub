@@ -6,7 +6,8 @@ import { spawnSync } from 'node:child_process'
 
 const root = resolve(import.meta.dirname, '..')
 const manifest = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'))
-assert.match(manifest.version, /^0\.5\.1-beta\.\d+$/)
+// The release number is independent of the hall protocol; see verify-package-exports.mjs.
+assert.match(manifest.version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/)
 const output = resolve(root, 'artifacts', `candidate-${manifest.version}`)
 await mkdir(output, { recursive: true })
 function run(command, args) {

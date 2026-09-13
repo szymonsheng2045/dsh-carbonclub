@@ -19,6 +19,12 @@ Target: one public-lobby protocol with a hard capacity of 500 identities and eig
 - AES-256-GCM/HKDF project-room invitation and epoch primitives with tamper and rotation tests; project-room UI remains disabled.
 - Bilingual UI, privacy opt-in for the last completed session name, package export verification and CI.
 
+## Releasing this package
+
+- Pack with `npm pack`. `pnpm pack` rewrites the manifest and drops `packageManager`, so `scripts/check-release-readiness.mjs` then rejects the archive with "packed manifest differs from workspace" — the packer is wrong, not the gate.
+- Verify the exact archive before publishing: `node scripts/check-release-readiness.mjs --archive <abs-path>/dsh-human-buffer-<version>.tgz --sha256 <64 hex> --peer-id <measured relay Peer ID>`. It byte-compares every allowlisted payload, both READMEs and the manifest against the working tree, so any edit made after packing requires a repack.
+- Never place bootstrap variables (`DSH_CARBON_CLUB_BOOTSTRAP`, `PATH`, `HOME`, `NODE_*`) in a `.env` inside a profile directory or `DSH_HOME`: they are bootstrap-only, and DSH aborts startup instead of letting a profile set them. See the installation note in `README.md`.
+
 ## External go-live work
 
 - Before every public build, run `pnpm probe:relay` with
